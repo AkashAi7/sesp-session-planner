@@ -1,9 +1,12 @@
 .vscode/**
 .vscode-test/**
 src/**
+scripts/**
 **/*.ts
 **/*.map
 tsconfig.json
 .gitignore
+RELEASE_NOTES_*.md
 node_modules/**/test/**
 node_modules/**/*.md
+*.vsix

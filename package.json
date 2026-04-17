@@ -2,17 +2,13 @@
   "name": "sesp-session-planner",
   "displayName": "Solution Engineer Session Planner (SESP)",
   "description": "GitHub Copilot-powered VS Code extension that helps Solution Engineers plan hackathons, labs, sessions, and challenges across Azure and GitHub product suites.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "sesp",
   "engines": {
     "vscode": "^1.95.0",
     "node": ">=18"
   },
-  "categories": [
-    "AI",
-    "Chat",
-    "Other"
-  ],
+  "categories": ["AI", "Chat", "Other"],
   "keywords": [
     "github copilot",
     "copilot sdk",
@@ -23,9 +19,9 @@
   ],
   "activationEvents": [
     "onChatParticipant:sesp.planner",
-    "onCommand:sesp.generateSessionPlan",
-    "onCommand:sesp.generateLab",
-    "onCommand:sesp.generateGatekeeper"
+    "onView:sesp.plannerView",
+    "onView:sesp.historyView",
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -37,49 +33,69 @@
         "description": "Plan hackathons, labs, sessions, and challenges for Azure + GitHub.",
         "isSticky": true,
         "commands": [
-          {
-            "name": "hackathon",
-            "description": "Design a hackathon agenda with modules, challenges, and gatekeepers."
-          },
-          {
-            "name": "lab",
-            "description": "Generate a step-by-step infrastructure lab (how-to)."
-          },
-          {
-            "name": "challenge",
-            "description": "Generate a goal-oriented challenge (what-to-do) with hints."
-          },
-          {
-            "name": "onboarding",
-            "description": "Generate prerequisite checklist and environment setup scripts."
-          },
-          {
-            "name": "gatekeeper",
-            "description": "Generate a validation script / GitHub Action to verify completion."
-          },
-          {
-            "name": "architecture",
-            "description": "Mix and match Azure + GitHub products into a cohesive architecture."
-          }
+          { "name": "hackathon", "description": "Design a hackathon agenda with modules, challenges, and gatekeepers." },
+          { "name": "lab", "description": "Generate a step-by-step infrastructure lab (how-to)." },
+          { "name": "challenge", "description": "Generate a goal-oriented challenge (what-to-do) with hints." },
+          { "name": "onboarding", "description": "Generate prerequisite checklist and environment setup scripts." },
+          { "name": "gatekeeper", "description": "Generate a validation script / GitHub Action to verify completion." },
+          { "name": "architecture", "description": "Mix and match Azure + GitHub products into a cohesive architecture." }
         ]
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sesp",
+          "title": "SESP",
+          "icon": "media/sesp.svg"
+        }
+      ]
+    },
+    "views": {
+      "sesp": [
+        {
+          "id": "sesp.plannerView",
+          "name": "Planner",
+          "type": "webview",
+          "icon": "media/sesp.svg",
+          "contextualTitle": "SESP Planner"
+        },
+        {
+          "id": "sesp.historyView",
+          "name": "History",
+          "icon": "media/sesp.svg",
+          "contextualTitle": "SESP History"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        { "command": "sesp.newPlan", "when": "view == sesp.plannerView", "group": "navigation" },
+        { "command": "sesp.openSettings", "when": "view == sesp.plannerView", "group": "navigation@2" },
+        { "command": "sesp.clearHistory", "when": "view == sesp.historyView", "group": "navigation" },
+        { "command": "sesp.refreshHistory", "when": "view == sesp.historyView", "group": "navigation@2" }
+      ],
+      "view/item/context": [
+        { "command": "sesp.rerunFromHistory", "when": "view == sesp.historyView && viewItem == sespHistoryEntry", "group": "inline" },
+        { "command": "sesp.deleteFromHistory", "when": "view == sesp.historyView && viewItem == sespHistoryEntry", "group": "inline@2" }
+      ],
+      "commandPalette": [
+        { "command": "sesp.rerunFromHistory", "when": "false" },
+        { "command": "sesp.deleteFromHistory", "when": "false" }
+      ]
+    },
     "commands": [
-      {
-        "command": "sesp.generateSessionPlan",
-        "title": "SESP: Generate Full Session Plan",
-        "category": "SESP"
-      },
-      {
-        "command": "sesp.generateLab",
-        "title": "SESP: Generate Lab Guide",
-        "category": "SESP"
-      },
-      {
-        "command": "sesp.generateGatekeeper",
-        "title": "SESP: Generate Gatekeeper Validation",
-        "category": "SESP"
-      }
+      { "command": "sesp.openPlanner", "title": "SESP: Open Planner", "category": "SESP", "icon": "$(rocket)" },
+      { "command": "sesp.newPlan", "title": "New Plan", "category": "SESP", "icon": "$(add)" },
+      { "command": "sesp.quickStart", "title": "SESP: Quick Start (wizard)", "category": "SESP", "icon": "$(wand)" },
+      { "command": "sesp.generateSessionPlan", "title": "SESP: Generate Full Session Plan", "category": "SESP" },
+      { "command": "sesp.generateLab", "title": "SESP: Generate Lab Guide", "category": "SESP" },
+      { "command": "sesp.generateGatekeeper", "title": "SESP: Generate Gatekeeper Validation", "category": "SESP" },
+      { "command": "sesp.openSettings", "title": "Open SESP Settings", "category": "SESP", "icon": "$(gear)" },
+      { "command": "sesp.clearHistory", "title": "Clear History", "category": "SESP", "icon": "$(clear-all)" },
+      { "command": "sesp.refreshHistory", "title": "Refresh History", "category": "SESP", "icon": "$(refresh)" },
+      { "command": "sesp.rerunFromHistory", "title": "Rerun in Chat", "icon": "$(play)" },
+      { "command": "sesp.deleteFromHistory", "title": "Delete", "icon": "$(trash)" }
     ],
     "configuration": {
       "title": "SESP",
@@ -87,11 +103,7 @@
         "sesp.model": {
           "type": "string",
           "default": "gpt-4.1",
-          "enum": [
-            "gpt-4.1",
-            "claude-sonnet-4.5",
-            "gpt-5"
-          ],
+          "enum": ["gpt-4.1", "claude-sonnet-4.5", "gpt-5"],
           "description": "Model used by the GitHub Copilot SDK session."
         },
         "sesp.useCopilotSdk": {
@@ -107,12 +119,17 @@
         "sesp.cliUrl": {
           "type": "string",
           "default": "",
-          "description": "Optional URL of a running Copilot CLI server (e.g., localhost:4321). When set, the SDK connects to this server instead of spawning one."
+          "description": "Optional URL of a running Copilot CLI server (e.g., localhost:4321)."
         },
         "sesp.enableGithubMcp": {
           "type": "boolean",
           "default": true,
           "description": "Connect the session to GitHub's hosted MCP server for repo/issue/PR tools."
+        },
+        "sesp.showStatusBarItem": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the SESP item in the status bar for one-click planner access."
         }
       }
     }
