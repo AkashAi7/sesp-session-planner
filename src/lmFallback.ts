@@ -5,10 +5,27 @@ import * as vscode from "vscode";
  * VS Code Language Model API so the extension still works in vanilla VS Code
  * with GitHub Copilot Chat installed.
  */
+
 export async function runWithVsCodeLm(
   systemPrompt: string,
   userPrompt: string,
   stream: vscode.ChatResponseStream,
+  token: vscode.CancellationToken,
+  model?: vscode.LanguageModelChat
+): Promise<string> {
+  return runWithVsCodeLmTo(
+    systemPrompt,
+    userPrompt,
+    { onDelta: (d) => stream.markdown(d) },
+    token,
+    model
+  );
+}
+
+export async function runWithVsCodeLmTo(
+  systemPrompt: string,
+  userPrompt: string,
+  sink: { onDelta: (d: string) => void; onStatus?: (s: string) => void },
   token: vscode.CancellationToken,
   model?: vscode.LanguageModelChat
 ): Promise<string> {
@@ -18,11 +35,13 @@ export async function runWithVsCodeLm(
     (await vscode.lm.selectChatModels({ vendor: "copilot" }))[0];
 
   if (!chosen) {
-    stream.markdown(
+    sink.onDelta(
       "> **SESP fallback error:** No Copilot language model is available. Install GitHub Copilot Chat or configure `sesp.useCopilotSdk` with the Copilot CLI."
     );
     return "";
   }
+
+  sink.onStatus?.(`Using ${chosen.name}`);
 
   const messages = [
     vscode.LanguageModelChatMessage.User(systemPrompt),
@@ -33,7 +52,7 @@ export async function runWithVsCodeLm(
   let full = "";
   for await (const chunk of response.text) {
     full += chunk;
-    stream.markdown(chunk);
+    sink.onDelta(chunk);
   }
   return full;
 }

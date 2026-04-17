@@ -72,6 +72,21 @@ export class SespSession {
     stream: vscode.ChatResponseStream,
     token: vscode.CancellationToken
   ): Promise<string> {
+    return this.runTo(
+      prompt,
+      {
+        onDelta: (d) => stream.markdown(d),
+        onStatus: (s) => stream.progress(s)
+      },
+      token
+    );
+  }
+
+  async runTo(
+    prompt: string,
+    sink: { onDelta: (d: string) => void; onStatus?: (s: string) => void },
+    token: vscode.CancellationToken
+  ): Promise<string> {
     await this.ensureStarted();
     if (!this.session) throw new Error("SESP session failed to initialize.");
 
@@ -87,13 +102,13 @@ export class SespSession {
           const delta = event.data?.deltaContent ?? "";
           if (delta) {
             full += delta;
-            stream.markdown(delta);
+            sink.onDelta(delta);
           }
           break;
         }
         case "tool.execution_start": {
           const name = event.data?.toolName ?? "tool";
-          stream.progress(`Running tool: ${name}…`);
+          sink.onStatus?.(`Running tool: ${name}…`);
           break;
         }
         case "session.error": {

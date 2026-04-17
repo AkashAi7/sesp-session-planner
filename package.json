@@ -2,7 +2,7 @@
   "name": "sesp-session-planner",
   "displayName": "Solution Engineer Session Planner (SESP)",
   "description": "GitHub Copilot-powered VS Code extension that helps Solution Engineers plan hackathons, labs, sessions, and challenges across Azure and GitHub product suites.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "sesp",
   "engines": {
     "vscode": "^1.95.0",
