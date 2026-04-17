@@ -14,12 +14,11 @@ export interface CustomerBrief {
   industry: string;
   customerContext: string;
   constraints: string;
-  complianceTags: string[]; // e.g., "GDPR", "HIPAA", "PCI", "FedRAMP"
+  complianceTags: string[];
   tenant: "customer" | "microsoft" | "personal";
   audience: string;
   skillLevel: string;
   duration: string;
-  eventDate: string;
   technologies: string[];
   deliverables: Deliverable[];
   emphasis: string;
@@ -67,7 +66,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-<title>SESP Planner</title>
+<title>Forge</title>
 <style>
   :root { --radius: 6px; --gap: 10px; }
   body {
@@ -77,7 +76,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     padding: 14px; margin: 0; background: transparent;
   }
   header { margin-bottom: 14px; }
-  header h1 { font-size: 15px; margin: 0 0 2px 0; font-weight: 600; }
+  header h1 { font-size: 15px; margin: 0 0 2px 0; font-weight: 600; letter-spacing: 0.01em; }
   header .sub { color: var(--vscode-descriptionForeground); font-size: 12px; }
 
   details {
@@ -87,40 +86,33 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     background: var(--vscode-editor-background);
   }
   details > summary {
-    cursor: pointer;
-    padding: 8px 10px;
-    font-weight: 600;
-    font-size: 12px;
-    list-style: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    user-select: none;
+    cursor: pointer; padding: 8px 10px; font-weight: 600; font-size: 12px;
+    list-style: none; display: flex; align-items: center; gap: 8px; user-select: none;
   }
   details > summary::-webkit-details-marker { display: none; }
   details > summary .caret { transition: transform 120ms ease; opacity: 0.7; }
   details[open] > summary .caret { transform: rotate(90deg); }
   details > summary .pill {
-    margin-left: auto;
-    font-weight: 400;
-    font-size: 10px;
+    margin-left: auto; font-weight: 500; font-size: 10px;
     background: var(--vscode-badge-background);
     color: var(--vscode-badge-foreground);
-    padding: 1px 8px;
-    border-radius: 999px;
+    padding: 1px 8px; border-radius: 999px;
+  }
+  details > summary .pill.ok {
+    background: var(--vscode-testing-iconPassed, #3fb950);
+    color: #fff;
   }
   .section-body { padding: 4px 12px 12px; }
 
   .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--gap); }
   label { font-weight: 600; font-size: 12px; }
-  .hint { font-size: 11px; color: var(--vscode-descriptionForeground); }
+  .hint { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
   input, textarea, select {
     width: 100%; box-sizing: border-box;
     background: var(--vscode-input-background);
     color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border, transparent);
-    border-radius: var(--radius);
-    padding: 6px 8px;
+    border-radius: var(--radius); padding: 6px 8px;
     font-family: inherit; font-size: inherit;
   }
   textarea { resize: vertical; min-height: 60px; }
@@ -131,18 +123,54 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
   .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--gap); }
 
+  /* Chips — capsules with a clearly visible selected state */
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip {
-    padding: 3px 10px; border-radius: 999px;
-    border: 1px solid var(--vscode-panel-border, #3c3c3c);
-    background: var(--vscode-editor-background);
+    padding: 4px 12px; border-radius: 999px;
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #555));
+    background: var(--vscode-input-background, transparent);
+    color: var(--vscode-foreground);
     font-size: 11px; cursor: pointer; user-select: none;
+    transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
+  }
+  .chip:hover {
+    border-color: var(--vscode-focusBorder);
   }
   .chip.selected {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border-color: var(--vscode-button-background);
+    font-weight: 600;
   }
+  .chip.selected::before {
+    content: "✓ ";
+    font-weight: 700;
+  }
+  .chip.selected:hover {
+    background: var(--vscode-button-hoverBackground);
+    border-color: var(--vscode-button-hoverBackground);
+  }
+
+  /* Radio-group (capsule-shaped segmented control) */
+  .radio-group { display: flex; gap: 0; border: 1px solid var(--vscode-input-border, #555); border-radius: 999px; overflow: hidden; width: fit-content; }
+  .radio-group label {
+    padding: 5px 14px; font-size: 11px; cursor: pointer; user-select: none;
+    color: var(--vscode-foreground); background: var(--vscode-input-background);
+    border-right: 1px solid var(--vscode-input-border, #555);
+    font-weight: 500;
+  }
+  .radio-group label:last-child { border-right: none; }
+  .radio-group input[type="radio"] { display: none; }
+  .radio-group input[type="radio"]:checked + .rlabel {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-weight: 700;
+  }
+  .radio-group .rlabel {
+    padding: 5px 14px; display: inline-block; transition: background 80ms ease;
+  }
+  .radio-group .rlabel:hover { background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15)); }
+
   .group-title {
     font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
     color: var(--vscode-descriptionForeground); margin: 10px 0 4px;
@@ -150,33 +178,39 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 
   .deliverables { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .del {
-    border: 1px solid var(--vscode-panel-border, #3c3c3c);
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #555));
     border-radius: var(--radius);
-    padding: 8px; cursor: pointer; user-select: none;
+    padding: 9px; cursor: pointer; user-select: none;
     display: flex; gap: 8px; align-items: flex-start;
+    background: var(--vscode-input-background, transparent);
+    transition: border-color 80ms ease, background 80ms ease;
   }
+  .del:hover { border-color: var(--vscode-focusBorder); }
   .del .box {
-    width: 14px; height: 14px; border-radius: 3px;
+    width: 16px; height: 16px; border-radius: 3px;
     border: 1px solid var(--vscode-checkbox-border, var(--vscode-panel-border, #888));
     background: var(--vscode-checkbox-background, transparent);
-    flex-shrink: 0; margin-top: 2px;
+    flex-shrink: 0; margin-top: 1px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 10px; color: var(--vscode-checkbox-foreground, inherit);
+    font-size: 11px; font-weight: 700; color: var(--vscode-checkbox-foreground, inherit);
   }
   .del.selected {
-    border-color: var(--vscode-focusBorder);
-    background: var(--vscode-list-activeSelectionBackground);
-    color: var(--vscode-list-activeSelectionForeground);
+    border-color: var(--vscode-button-background);
+    background: color-mix(in srgb, var(--vscode-button-background) 18%, transparent);
   }
-  .del.selected .box { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: var(--vscode-button-background); }
+  .del.selected .box {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-button-background);
+  }
   .del .name { font-weight: 600; font-size: 12px; }
-  .del .desc { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
+  .del .desc { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; line-height: 1.4; }
 
   .actions {
     display: flex; gap: 8px; margin-top: 14px;
     position: sticky; bottom: 0;
     background: var(--vscode-sideBar-background, transparent);
-    padding-top: 10px;
+    padding: 10px 0 4px;
   }
   button.primary {
     flex: 1; background: var(--vscode-button-background);
@@ -196,8 +230,8 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
 <header>
-  <h1>Solution Engineer Session Planner</h1>
-  <div class="sub">Brief your customer scenario — SESP will generate every selected deliverable.</div>
+  <h1>Forge — Customer Engagement Studio</h1>
+  <div class="sub">Brief the customer scenario — Forge generates every selected deliverable and drops it into your workspace.</div>
 </header>
 
 <details open>
@@ -213,12 +247,12 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
         <select id="industry">
           <option value="">— Select —</option>
           <option>Financial Services</option>
-          <option>Healthcare & Life Sciences</option>
-          <option>Retail & CPG</option>
+          <option>Healthcare &amp; Life Sciences</option>
+          <option>Retail &amp; CPG</option>
           <option>Manufacturing</option>
           <option>Public Sector / Government</option>
           <option>Education</option>
-          <option>Media & Entertainment</option>
+          <option>Media &amp; Entertainment</option>
           <option>Energy</option>
           <option>Telco</option>
           <option>Technology / ISV</option>
@@ -234,23 +268,25 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 </details>
 
 <details open>
-  <summary><span class="caret">▸</span> 2. Constraints <span class="pill" id="pill-constraints">optional</span></summary>
+  <summary><span class="caret">▸</span> 2. Constraints &amp; environment <span class="pill">optional</span></summary>
   <div class="section-body">
     <div class="field">
       <label for="constraints">Constraints</label>
-      <textarea id="constraints" placeholder="Budget limits, tenant boundaries, data residency, approved regions, network policies, allowed SKUs, blocked services, timing…"></textarea>
+      <textarea id="constraints" placeholder="Budget limits, approved regions, data residency, network policies, allowed SKUs, blocked services, timing…"></textarea>
     </div>
+
     <div class="group-title">Compliance</div>
     <div class="chips" id="complianceChips"></div>
+
+    <div class="group-title" style="margin-top:14px;">Target environment</div>
+    <div class="radio-group" id="tenantGroup">
+      <label><input type="radio" name="tenant" value="customer" checked><span class="rlabel">Customer tenant</span></label>
+      <label><input type="radio" name="tenant" value="microsoft"><span class="rlabel">Microsoft tenant</span></label>
+      <label><input type="radio" name="tenant" value="personal"><span class="rlabel">Personal sandbox</span></label>
+    </div>
+    <div class="hint" id="tenantHint"></div>
+
     <div class="row3" style="margin-top:10px;">
-      <div class="field">
-        <label for="tenant">Runs in tenant</label>
-        <select id="tenant">
-          <option value="customer" selected>Customer tenant</option>
-          <option value="microsoft">Microsoft tenant</option>
-          <option value="personal">Personal / sandbox</option>
-        </select>
-      </div>
       <div class="field">
         <label for="duration">Duration</label>
         <select id="duration">
@@ -263,12 +299,6 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
           <option>1 week</option>
         </select>
       </div>
-      <div class="field">
-        <label for="eventDate">Event date</label>
-        <input id="eventDate" type="date" />
-      </div>
-    </div>
-    <div class="row2">
       <div class="field">
         <label for="audience">Audience role</label>
         <select id="audience">
@@ -346,18 +376,24 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 
   const deliverables = [
     { id: "hackathon",    name: "Hackathon",    desc: "Full agenda with modules, challenges, gatekeepers" },
-    { id: "lab",          name: "Labs",         desc: "Step-by-step how-to with CLI + IaC" },
-    { id: "challenge",    name: "Challenges",   desc: "Goal-oriented tasks with hints & success criteria" },
+    { id: "lab",          name: "Labs",         desc: "End-to-end: provisioning → app → gatekeeper → troubleshooting → cleanup" },
+    { id: "challenge",    name: "Challenges",   desc: "Goals + acceptance criteria + progressive hints; no full solution" },
     { id: "session",      name: "Session material", desc: "Session plan, talk track, slide outline, demo script" },
     { id: "architecture", name: "Architecture", desc: "Mix-and-match Azure + GitHub design with Mermaid" },
     { id: "onboarding",   name: "Onboarding",   desc: "Prereqs, setup scripts, readiness validator" },
-    { id: "gatekeeper",   name: "Gatekeepers",  desc: "Validation scripts / GitHub Actions" }
+    { id: "gatekeeper",   name: "Gatekeepers",  desc: "Validation scripts / GitHub Actions per challenge" }
   ];
+
+  const TENANT_HINTS = {
+    customer: "Generates IaC / commands that assume they will run inside the customer's own tenant and subscription. Scripts will use parameterized subscription / tenant / org placeholders and call out required customer consents.",
+    microsoft: "Assumes you will dry-run this inside a Microsoft internal sandbox subscription where you already have Owner. Prefers short-lived resource groups and cleanup scripts.",
+    personal: "Assumes a personal Azure subscription / GitHub user account. Prefers free tiers and low-cost SKUs; flags anything that needs a paid SKU."
+  };
 
   const state = {
     compliance: new Set(),
     tech: new Set(),
-    deliverables: new Set(["hackathon","architecture"])
+    deliverables: new Set(["lab","challenge","gatekeeper"])
   };
 
   function loadState() {
@@ -368,15 +404,24 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
           const el = document.getElementById(k);
           if (el) el.value = prev.fields[k];
         }
+        if (prev.tenant) {
+          const radio = document.querySelector('input[name="tenant"][value="' + prev.tenant + '"]');
+          if (radio) radio.checked = true;
+        }
         state.compliance = new Set(prev.compliance || []);
         state.tech = new Set(prev.tech || []);
-        state.deliverables = new Set(prev.deliverables || ["hackathon","architecture"]);
+        state.deliverables = new Set(prev.deliverables || ["lab","challenge","gatekeeper"]);
       }
     } catch {}
   }
 
+  function getTenant() {
+    const r = document.querySelector('input[name="tenant"]:checked');
+    return r ? r.value : "customer";
+  }
+
   function saveState() {
-    const fieldIds = ["customerName","industry","customerContext","constraints","tenant","duration","eventDate","audience","skillLevel","emphasis","model"];
+    const fieldIds = ["customerName","industry","customerContext","constraints","duration","audience","skillLevel","emphasis","model"];
     const fields = {};
     for (const id of fieldIds) {
       const el = document.getElementById(id);
@@ -384,6 +429,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     }
     vscode.setState({
       fields,
+      tenant: getTenant(),
       compliance: [...state.compliance],
       tech: [...state.tech],
       deliverables: [...state.deliverables]
@@ -395,7 +441,8 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     el.className = "chip" + (set.has(value) ? " selected" : "");
     el.textContent = value;
     el.onclick = () => {
-      if (set.has(value)) set.delete(value); else set.add(value);
+      if (set.has(value)) { set.delete(value); el.classList.remove("selected"); }
+      else { set.add(value); el.classList.add("selected"); }
       onToggle();
       saveState();
     };
@@ -409,15 +456,23 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   }
 
   function updateTechPill() {
-    document.getElementById("pill-tech").textContent = state.tech.size + " selected";
+    const p = document.getElementById("pill-tech");
+    p.textContent = state.tech.size + " selected";
+    p.classList.toggle("ok", state.tech.size > 0);
   }
   function updateDelPill() {
-    document.getElementById("pill-del").textContent = state.deliverables.size + " selected";
+    const p = document.getElementById("pill-del");
+    p.textContent = state.deliverables.size + " selected";
+    p.classList.toggle("ok", state.deliverables.size > 0);
   }
   function updateCustomerPill() {
     const ok = document.getElementById("customerName").value.trim() && document.getElementById("customerContext").value.trim();
     const pill = document.getElementById("pill-customer");
     pill.textContent = ok ? "ready" : "required";
+    pill.classList.toggle("ok", !!ok);
+  }
+  function updateTenantHint() {
+    document.getElementById("tenantHint").textContent = TENANT_HINTS[getTenant()] || "";
   }
 
   function renderDeliverables() {
@@ -447,6 +502,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     updateTechPill();
     updateDelPill();
     updateCustomerPill();
+    updateTenantHint();
   }
 
   function gather() {
@@ -456,11 +512,10 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       customerContext: document.getElementById("customerContext").value.trim(),
       constraints: document.getElementById("constraints").value.trim(),
       complianceTags: [...state.compliance],
-      tenant: document.getElementById("tenant").value,
+      tenant: getTenant(),
       audience: document.getElementById("audience").value,
       skillLevel: document.getElementById("skillLevel").value,
       duration: document.getElementById("duration").value,
-      eventDate: document.getElementById("eventDate").value,
       technologies: [...state.tech],
       deliverables: [...state.deliverables],
       emphasis: document.getElementById("emphasis").value,
@@ -486,8 +541,8 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   };
   document.getElementById("reset").onclick = () => {
     vscode.setState(undefined);
-    for (const id of ["customerName","industry","customerContext","constraints","eventDate"]) document.getElementById(id).value = "";
-    document.getElementById("tenant").selectedIndex = 0;
+    for (const id of ["customerName","industry","customerContext","constraints"]) document.getElementById(id).value = "";
+    document.querySelector('input[name="tenant"][value="customer"]').checked = true;
     document.getElementById("duration").selectedIndex = 2;
     document.getElementById("audience").selectedIndex = 0;
     document.getElementById("skillLevel").selectedIndex = 1;
@@ -495,7 +550,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     document.getElementById("model").selectedIndex = 0;
     state.compliance.clear();
     state.tech.clear();
-    state.deliverables = new Set(["hackathon","architecture"]);
+    state.deliverables = new Set(["lab","challenge","gatekeeper"]);
     document.getElementById("error").textContent = "";
     renderAll();
   };
@@ -503,8 +558,11 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   ["customerName","customerContext"].forEach((id) => {
     document.getElementById(id).addEventListener("input", () => { updateCustomerPill(); saveState(); });
   });
-  ["industry","constraints","tenant","duration","eventDate","audience","skillLevel","emphasis","model"].forEach((id) => {
+  ["industry","constraints","duration","audience","skillLevel","emphasis","model"].forEach((id) => {
     document.getElementById(id).addEventListener("change", saveState);
+  });
+  document.querySelectorAll('input[name="tenant"]').forEach((r) => {
+    r.addEventListener("change", () => { updateTenantHint(); saveState(); });
   });
 
   loadState();

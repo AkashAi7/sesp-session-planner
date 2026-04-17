@@ -1,24 +1,21 @@
 import * as vscode from "vscode";
 
 /**
- * A dedicated editor panel that renders the SESP response as a proper document
- * (markdown → HTML), with streaming, a copy button, and a "Save to workspace"
- * button. This removes the dependency on the Copilot Chat view as the only
- * surface for results.
+ * A dedicated editor panel that renders the Forge response as a proper document
+ * (markdown → HTML), with streaming, copy, "Save to workspace", and
+ * "Create customer repo" buttons.
  */
 export class SespResultsPanel {
-  private static panels = new Map<string, SespResultsPanel>();
-
   public readonly onDidClose = new vscode.EventEmitter<void>();
+  public readonly onAction = new vscode.EventEmitter<"createRepo" | "reveal">();
 
   private panel: vscode.WebviewPanel;
   private buffer = "";
   private title: string;
+  private savedUri?: vscode.Uri;
 
   static create(title: string, extensionUri: vscode.Uri): SespResultsPanel {
-    const p = new SespResultsPanel(title, extensionUri);
-    this.panels.set(p.panel.viewType + ":" + Date.now(), p);
-    return p;
+    return new SespResultsPanel(title, extensionUri);
   }
 
   private constructor(title: string, private readonly extensionUri: vscode.Uri) {
@@ -34,13 +31,18 @@ export class SespResultsPanel {
 
     this.panel.webview.onDidReceiveMessage(async (msg) => {
       if (msg?.type === "save") await this.saveToWorkspace();
-      if (msg?.type === "copy") await vscode.env.clipboard.writeText(this.buffer);
-      if (msg?.type === "openMarkdown") await this.openMarkdown();
+      else if (msg?.type === "copy") await vscode.env.clipboard.writeText(this.buffer);
+      else if (msg?.type === "openMarkdown") await this.openMarkdown();
+      else if (msg?.type === "createRepo") this.onAction.fire("createRepo");
+      else if (msg?.type === "revealSaved" && this.savedUri) {
+        await vscode.commands.executeCommand("revealInExplorer", this.savedUri);
+      }
     });
 
     this.panel.onDidDispose(() => {
       this.onDidClose.fire();
       this.onDidClose.dispose();
+      this.onAction.dispose();
     });
   }
 
@@ -57,6 +59,12 @@ export class SespResultsPanel {
     this.panel.webview.postMessage({ type: "done" });
   }
 
+  /** Called by the extension after an auto-save to surface the path in the toolbar. */
+  notifySaved(uri: vscode.Uri) {
+    this.savedUri = uri;
+    this.panel.webview.postMessage({ type: "saved", path: vscode.workspace.asRelativePath(uri) });
+  }
+
   reveal() {
     this.panel.reveal();
   }
@@ -70,7 +78,7 @@ export class SespResultsPanel {
   }
 
   private safeFilename(): string {
-    return this.title.replace(/[^\w\-]+/g, "_").slice(0, 80) || "sesp-plan";
+    return this.title.replace(/[^\w\-]+/g, "_").slice(0, 80) || "forge-plan";
   }
 
   private async saveToWorkspace() {
@@ -81,14 +89,12 @@ export class SespResultsPanel {
     const uri = await vscode.window.showSaveDialog({
       defaultUri,
       filters: { Markdown: ["md"] },
-      saveLabel: "Save SESP plan"
+      saveLabel: "Save engagement plan"
     });
     if (!uri) return;
     await vscode.workspace.fs.writeFile(uri, Buffer.from(this.buffer, "utf8"));
-    const open = await vscode.window.showInformationMessage(
-      `Saved ${uri.fsPath}`,
-      "Open"
-    );
+    this.notifySaved(uri);
+    const open = await vscode.window.showInformationMessage(`Saved ${uri.fsPath}`, "Open");
     if (open === "Open") await vscode.window.showTextDocument(uri);
   }
 
@@ -107,7 +113,6 @@ export class SespResultsPanel {
       `font-src ${this.panel.webview.cspSource}`
     ].join("; ");
 
-    // Using marked via CDN for markdown rendering; falls back to escaped text if blocked.
     return /* html */ `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -128,8 +133,9 @@ export class SespResultsPanel {
     padding: 10px 16px;
     background: var(--vscode-editor-background);
     border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+    flex-wrap: wrap;
   }
-  .toolbar .title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toolbar .title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 160px; }
   .toolbar .status { font-size: 11px; color: var(--vscode-descriptionForeground); }
   .toolbar button {
     background: transparent; color: var(--vscode-foreground);
@@ -141,8 +147,19 @@ export class SespResultsPanel {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);
     border-color: var(--vscode-button-background);
+    font-weight: 600;
   }
   .toolbar button.primary:hover { background: var(--vscode-button-hoverBackground); }
+  .saved-banner {
+    padding: 6px 16px; font-size: 11px;
+    background: var(--vscode-notifications-background, rgba(0,120,212,0.08));
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+    color: var(--vscode-descriptionForeground);
+    display: none;
+  }
+  .saved-banner.visible { display: block; }
+  .saved-banner code { background: var(--vscode-textCodeBlock-background, rgba(127,127,127,0.15)); padding: 1px 4px; border-radius: 3px; }
+  .saved-banner a { cursor: pointer; color: var(--vscode-textLink-foreground); margin-left: 8px; }
 
   main {
     max-width: 920px; margin: 0 auto; padding: 24px 32px 80px;
@@ -183,8 +200,10 @@ export class SespResultsPanel {
   <div class="status" id="status">Starting…</div>
   <button id="copyBtn">Copy</button>
   <button id="openBtn">Open as .md</button>
-  <button class="primary" id="saveBtn">Save to workspace</button>
+  <button id="saveBtn">Save as…</button>
+  <button class="primary" id="repoBtn" disabled>Create customer repo</button>
 </div>
+<div class="saved-banner" id="savedBanner"></div>
 <main id="content"><em>Awaiting response…</em></main>
 
 <script nonce="${nonce}" src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
@@ -192,6 +211,8 @@ export class SespResultsPanel {
   const vscode = acquireVsCodeApi();
   const content = document.getElementById("content");
   const status = document.getElementById("status");
+  const repoBtn = document.getElementById("repoBtn");
+  const banner = document.getElementById("savedBanner");
   let buffer = "";
   let streaming = true;
 
@@ -209,12 +230,18 @@ export class SespResultsPanel {
     const m = e.data;
     if (m.type === "delta") { buffer += m.delta; render(); }
     else if (m.type === "status") { status.textContent = m.text; }
-    else if (m.type === "done") { streaming = false; status.textContent = "Done"; render(); }
+    else if (m.type === "done") { streaming = false; status.textContent = "Done"; repoBtn.disabled = false; render(); }
+    else if (m.type === "saved") {
+      banner.classList.add("visible");
+      banner.innerHTML = 'Saved to <code>' + m.path + '</code><a id="revealLink">Reveal in Explorer</a>';
+      document.getElementById("revealLink").onclick = () => vscode.postMessage({ type: "revealSaved" });
+    }
   });
 
   document.getElementById("copyBtn").onclick = () => vscode.postMessage({ type: "copy" });
   document.getElementById("saveBtn").onclick = () => vscode.postMessage({ type: "save" });
   document.getElementById("openBtn").onclick = () => vscode.postMessage({ type: "openMarkdown" });
+  repoBtn.onclick = () => vscode.postMessage({ type: "createRepo" });
 </script>
 </body>
 </html>`;

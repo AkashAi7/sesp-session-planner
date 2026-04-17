@@ -1,8 +1,8 @@
 {
   "name": "sesp-session-planner",
-  "displayName": "Solution Engineer Session Planner (SESP)",
-  "description": "GitHub Copilot-powered VS Code extension that helps Solution Engineers plan hackathons, labs, sessions, and challenges across Azure and GitHub product suites.",
-  "version": "0.3.0",
+  "displayName": "Forge — Customer Engagement Studio",
+  "description": "GitHub Copilot-powered engagement studio for Solution Engineers. Brief a customer once, generate hackathons, end-to-end labs, challenges with acceptance criteria, gatekeepers, and architecture — auto-saved into your workspace and optionally published as a customer-sharable repo.",
+  "version": "0.4.0",
   "publisher": "sesp",
   "engines": {
     "vscode": "^1.95.0",
@@ -15,7 +15,9 @@
     "azure",
     "hackathon",
     "solution engineer",
-    "session planner"
+    "engagement",
+    "customer",
+    "forge"
   ],
   "activationEvents": [
     "onChatParticipant:sesp.planner",
@@ -28,16 +30,16 @@
     "chatParticipants": [
       {
         "id": "sesp.planner",
-        "name": "sesp",
-        "fullName": "Solution Engineer Session Planner",
-        "description": "Plan hackathons, labs, sessions, and challenges for Azure + GitHub.",
+        "name": "forge",
+        "fullName": "Forge",
+        "description": "Plan hackathons, end-to-end labs, challenges with acceptance criteria, and gatekeepers for Azure + GitHub.",
         "isSticky": true,
         "commands": [
           { "name": "hackathon", "description": "Design a hackathon agenda with modules, challenges, and gatekeepers." },
-          { "name": "lab", "description": "Generate a step-by-step infrastructure lab (how-to)." },
-          { "name": "challenge", "description": "Generate a goal-oriented challenge (what-to-do) with hints." },
+          { "name": "lab", "description": "Generate an end-to-end lab: provisioning → app → gatekeeper → troubleshooting → cleanup." },
+          { "name": "challenge", "description": "Generate a goal-oriented challenge with acceptance criteria and progressive hints." },
           { "name": "onboarding", "description": "Generate prerequisite checklist and environment setup scripts." },
-          { "name": "gatekeeper", "description": "Generate a validation script / GitHub Action to verify completion." },
+          { "name": "gatekeeper", "description": "Generate a validation script / GitHub Action that checks every acceptance criterion." },
           { "name": "architecture", "description": "Mix and match Azure + GitHub products into a cohesive architecture." }
         ]
       }
@@ -46,7 +48,7 @@
       "activitybar": [
         {
           "id": "sesp",
-          "title": "SESP",
+          "title": "Forge",
           "icon": "media/sesp.svg"
         }
       ]
@@ -58,13 +60,13 @@
           "name": "Planner",
           "type": "webview",
           "icon": "media/sesp.svg",
-          "contextualTitle": "SESP Planner"
+          "contextualTitle": "Forge Planner"
         },
         {
           "id": "sesp.historyView",
           "name": "History",
           "icon": "media/sesp.svg",
-          "contextualTitle": "SESP History"
+          "contextualTitle": "Forge History"
         }
       ]
     },
@@ -77,28 +79,33 @@
       ],
       "view/item/context": [
         { "command": "sesp.rerunFromHistory", "when": "view == sesp.historyView && viewItem == sespHistoryEntry", "group": "inline" },
+        { "command": "sesp.createCustomerRepoForEntry", "when": "view == sesp.historyView && viewItem == sespHistoryEntry", "group": "1_actions" },
         { "command": "sesp.deleteFromHistory", "when": "view == sesp.historyView && viewItem == sespHistoryEntry", "group": "inline@2" }
       ],
       "commandPalette": [
         { "command": "sesp.rerunFromHistory", "when": "false" },
-        { "command": "sesp.deleteFromHistory", "when": "false" }
+        { "command": "sesp.deleteFromHistory", "when": "false" },
+        { "command": "sesp.createCustomerRepoForEntry", "when": "false" },
+        { "command": "sesp.openHistoryEntry", "when": "false" }
       ]
     },
     "commands": [
-      { "command": "sesp.openPlanner", "title": "SESP: Open Planner", "category": "SESP", "icon": "$(rocket)" },
-      { "command": "sesp.newPlan", "title": "New Plan", "category": "SESP", "icon": "$(add)" },
-      { "command": "sesp.quickStart", "title": "SESP: Quick Start (wizard)", "category": "SESP", "icon": "$(wand)" },
-      { "command": "sesp.generateSessionPlan", "title": "SESP: Generate Full Session Plan", "category": "SESP" },
-      { "command": "sesp.generateLab", "title": "SESP: Generate Lab Guide", "category": "SESP" },
-      { "command": "sesp.generateGatekeeper", "title": "SESP: Generate Gatekeeper Validation", "category": "SESP" },
-      { "command": "sesp.openSettings", "title": "Open SESP Settings", "category": "SESP", "icon": "$(gear)" },
-      { "command": "sesp.clearHistory", "title": "Clear History", "category": "SESP", "icon": "$(clear-all)" },
-      { "command": "sesp.refreshHistory", "title": "Refresh History", "category": "SESP", "icon": "$(refresh)" },
-      { "command": "sesp.rerunFromHistory", "title": "Rerun in Chat", "icon": "$(play)" },
-      { "command": "sesp.deleteFromHistory", "title": "Delete", "icon": "$(trash)" }
+      { "command": "sesp.openPlanner", "title": "Forge: Open Planner", "category": "Forge", "icon": "$(flame)" },
+      { "command": "sesp.newPlan", "title": "New Engagement", "category": "Forge", "icon": "$(add)" },
+      { "command": "sesp.quickStart", "title": "Forge: Quick Start (wizard)", "category": "Forge", "icon": "$(wand)" },
+      { "command": "sesp.generateSessionPlan", "title": "Forge: Generate Full Session Plan", "category": "Forge" },
+      { "command": "sesp.generateLab", "title": "Forge: Generate Lab Guide", "category": "Forge" },
+      { "command": "sesp.generateGatekeeper", "title": "Forge: Generate Gatekeeper Validation", "category": "Forge" },
+      { "command": "sesp.openSettings", "title": "Open Forge Settings", "category": "Forge", "icon": "$(gear)" },
+      { "command": "sesp.clearHistory", "title": "Clear History", "category": "Forge", "icon": "$(clear-all)" },
+      { "command": "sesp.refreshHistory", "title": "Refresh History", "category": "Forge", "icon": "$(refresh)" },
+      { "command": "sesp.rerunFromHistory", "title": "Rerun", "icon": "$(play)" },
+      { "command": "sesp.deleteFromHistory", "title": "Delete", "icon": "$(trash)" },
+      { "command": "sesp.openHistoryEntry", "title": "Open", "category": "Forge" },
+      { "command": "sesp.createCustomerRepoForEntry", "title": "Create customer repo…", "category": "Forge", "icon": "$(repo)" }
     ],
     "configuration": {
-      "title": "SESP",
+      "title": "Forge",
       "properties": {
         "sesp.model": {
           "type": "string",
@@ -129,7 +136,18 @@
         "sesp.showStatusBarItem": {
           "type": "boolean",
           "default": true,
-          "description": "Show the SESP item in the status bar for one-click planner access."
+          "description": "Show the Forge item in the status bar for one-click planner access."
+        },
+        "sesp.autoSaveToWorkspace": {
+          "type": "boolean",
+          "default": true,
+          "description": "After generation completes, automatically save materials under ./engagements/<customer-slug>/ in the current workspace."
+        },
+        "sesp.customerRepoDefaultVisibility": {
+          "type": "string",
+          "enum": ["private", "internal", "public"],
+          "default": "private",
+          "description": "Default visibility when creating a customer-sharable GitHub repository via the 'Create customer repo' action."
         }
       }
     }
