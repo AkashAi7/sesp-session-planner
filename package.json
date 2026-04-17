@@ -2,7 +2,7 @@
   "name": "sesp-session-planner",
   "displayName": "Forge — Customer Engagement Studio",
   "description": "GitHub Copilot-powered engagement studio for Solution Engineers. Brief a customer once, generate hackathons, end-to-end labs, challenges with acceptance criteria, gatekeepers, and architecture — auto-saved into your workspace and optionally published as a customer-sharable repo.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "sesp",
   "engines": {
     "vscode": "^1.95.0",

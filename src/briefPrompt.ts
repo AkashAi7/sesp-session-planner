@@ -86,7 +86,7 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
 
   if (brief.deliverables.includes("lab")) {
     lines.push("## Lab specification (MUST follow when writing the Labs section)");
-    lines.push(renderLabSpec(brief.labOptions));
+    lines.push(renderLabSpec(brief.labOptions, brief.technologies));
     lines.push("");
   }
   if (brief.deliverables.includes("session")) {
@@ -102,7 +102,7 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
   return lines.join("\n");
 }
 
-function renderLabSpec(opts: LabOptions): string {
+function renderLabSpec(opts: LabOptions, technologies: string[]): string {
   const sections = opts.components.length
     ? opts.components.map((c) => `  - **${LAB_COMPONENT_LABEL[c] ?? c}**`).join("\n")
     : "  - (all standard sections)";
@@ -111,6 +111,21 @@ function renderLabSpec(opts: LabOptions): string {
     opts.depth === "exhaustive"
       ? "Depth: **EXHAUSTIVE**. Do not summarize. Show every command, every parameter, and every output the participant should see. Do not elide any step with phrases like 'configure as needed' — spell it out."
       : "Depth: **Standard**. Walk the participant through without hand-waving, but collapse obvious boilerplate.";
+
+  const targetLabCount = parseInt(opts.labCount || "3", 10) || 3;
+  const techList = technologies.length ? technologies.join(", ") : "(none listed — infer from context)";
+  const techCoverageRule = technologies.length >= 2
+    ? [
+        "",
+        "### CRITICAL — Technology coverage across labs",
+        `The SE selected these technologies in scope: **${techList}**. Every one of them MUST be exercised hands-on in at least one lab. Do NOT concentrate all labs on a single technology.`,
+        "",
+        "Before writing the labs, emit a **Coverage matrix** table with columns `Lab # | Title | Primary technology | Secondary technologies | Learning outcome`. Every selected technology from the list above MUST appear in the `Primary technology` column for at least one lab. If two technologies are closely paired (e.g. AKS + ACR), they may share a lab but each must still have its own primary-technology lab elsewhere.",
+        "",
+        `You were asked for **${targetLabCount}** labs. If ${targetLabCount} is smaller than the number of selected technologies, **override the count** and produce one lab per technology at minimum, plus an integration lab that ties them together. State explicitly in the Coverage matrix why you scaled up.`,
+        ""
+      ].join("\n")
+    : "";
 
   const timings = opts.includeTimings
     ? "Per-step wall-clock time estimate (e.g. `~5 min`) on every step."
@@ -140,23 +155,28 @@ function renderLabSpec(opts: LabOptions): string {
       : `IaC: **${opts.iac}**. Include the actual template files (not just snippets) under a \`infra/\` folder convention.`;
 
   return [
-    `Produce **${opts.labCount || "at least 3"}** end-to-end labs. ${depthRule}`,
-    "",
+    `Produce **${targetLabCount}** end-to-end labs (adjust upward per the coverage rule if needed). ${depthRule}`,
+    techCoverageRule,
     "Every lab MUST be structured as follows, in this exact order:",
     "",
-    "1. **Title + learning outcomes** — what the participant can do after this lab that they could not before.",
-    "2. **Scenario tie-in** — one paragraph linking this lab to the customer context above.",
-    "3. **Sections** (each as a `###` heading; include only those selected):",
+    "1. **Title + learning outcomes** — bullet list: \"After this lab you can ___\". Min 3 outcomes.",
+    "2. **Scenario tie-in** — one paragraph linking this lab to the customer context above and naming the *primary* + *secondary* technologies it exercises.",
+    "3. **Prerequisites check** — numbered commands that print PASS/FAIL for every tool/role/quota the lab needs.",
+    "4. **Sections** (each as a `###` heading; include only those selected):",
     sections,
-    "4. **Validation** — the gatekeeper command(s) and expected PASS output.",
-    "5. **Next lab handoff** — what state this lab leaves the environment in and which variables/outputs feed the next lab.",
+    "5. **Hands-on exercises** — at least **2 exercises** embedded in the lab (not at the end). Each exercise is: a one-line task, starter snippet/prompt (partially filled), expected end state, and the validation command. These are copy-paste-and-modify style, not greenfield — they build on what the lab just walked through.",
+    "6. **Stretch goal** — one extension task with acceptance criteria but no walkthrough.",
+    "7. **Validation** — the gatekeeper command(s) and expected PASS output.",
+    "8. **Next lab handoff** — what state this lab leaves the environment in and which variables/outputs feed the next lab (name them explicitly).",
     "",
     "**Hard requirements for every lab:**",
+    "- **Break every section into numbered micro-steps** (1.1, 1.2, 1.3 …). Each micro-step has: purpose (one sentence) → command block → expected output → \"why this works\" note. No unlabeled walls of code.",
     "- Every prerequisite must be verifiable with a command that prints PASS/FAIL.",
     "- Every role assignment is spelled out as a concrete `az role assignment create …` command (or equivalent) with the principal ID captured into a variable first.",
-    "- If step N depends on output from step N-1, show the exact `$VAR=$(…)` capture (bash) or `$var = (…)` (pwsh) so participants can copy-paste without guessing.",
-    "- Provide a **troubleshooting table** per lab: a 3-column markdown table (Symptom | Likely cause | Fix command).",
+    "- If step N depends on output from step N-1, show the exact `$VAR=$(…)` capture (bash) or `$var = (…)` (pwsh) so participants can copy-paste without guessing. **Never** write `<your-resource-name>` placeholders mid-lab — resolve them via capture.",
+    "- Provide a **troubleshooting table** per lab: a 3-column markdown table (Symptom | Likely cause | Fix command) with at least 5 rows drawn from the real failure modes of this scenario.",
     "- All resource names use a prefix derived from the customer's abbreviation (e.g. `ctso-aks-dev`), and region/SKU placeholders are declared **once** at the top and reused.",
+    "- Each lab must be **independently runnable from a clean environment** given its prereqs block — but when part of a series, must also slot into the handoff chain without duplicate provisioning.",
     runtimeLine,
     iacLine,
     timings,
