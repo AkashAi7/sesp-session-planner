@@ -9,6 +9,29 @@ export type Deliverable =
   | "gatekeeper"
   | "architecture";
 
+export interface LabOptions {
+  components: string[]; // subset of LAB_COMPONENT_IDS
+  runtime: "bash" | "pwsh" | "mixed" | "actions";
+  iac: "azd" | "bicep" | "terraform" | "arm" | "none";
+  labCount: string;
+  includeTimings: boolean;
+  includeCost: boolean;
+  includeSecurityReview: boolean;
+  includeExpectedOutputs: boolean;
+  depth: "standard" | "exhaustive";
+}
+
+export interface SessionOptions {
+  components: string[]; // subset of SESSION_COMPONENT_IDS
+  structure: "theory" | "demo" | "hands-on" | "mixed";
+  slideCount: string;
+  topics: string;
+  introDepth: "assume-expertise" | "light-intro" | "full-intro";
+  wrapUp: string;
+  format: "in-person" | "virtual" | "hybrid";
+  interactivity: "low" | "medium" | "high";
+}
+
 export interface CustomerBrief {
   customerName: string;
   industry: string;
@@ -23,7 +46,55 @@ export interface CustomerBrief {
   deliverables: Deliverable[];
   emphasis: string;
   model: string;
+  labOptions: LabOptions;
+  sessionOptions: SessionOptions;
 }
+
+export const LAB_COMPONENT_IDS = [
+  "prereqs",
+  "role-assignments",
+  "provisioning",
+  "app-deploy",
+  "config",
+  "gatekeeper-run",
+  "troubleshooting",
+  "cleanup"
+] as const;
+
+export const SESSION_COMPONENT_IDS = [
+  "talk-track",
+  "slide-outline",
+  "speaker-notes",
+  "demo-script",
+  "workshop",
+  "qa-prompts",
+  "pre-reads",
+  "follow-up",
+  "recording-checklist"
+] as const;
+
+export const DEFAULT_LAB_OPTIONS: LabOptions = {
+  components: [...LAB_COMPONENT_IDS],
+  runtime: "mixed",
+  iac: "bicep",
+  labCount: "3",
+  includeTimings: true,
+  includeCost: true,
+  includeSecurityReview: true,
+  includeExpectedOutputs: true,
+  depth: "exhaustive"
+};
+
+export const DEFAULT_SESSION_OPTIONS: SessionOptions = {
+  components: ["talk-track", "slide-outline", "speaker-notes", "demo-script", "qa-prompts"],
+  structure: "mixed",
+  slideCount: "20",
+  topics: "",
+  introDepth: "light-intro",
+  wrapUp: "",
+  format: "hybrid",
+  interactivity: "medium"
+};
 
 export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "sesp.plannerView";
@@ -70,10 +141,8 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 <style>
   :root { --radius: 6px; --gap: 10px; }
   body {
-    font-family: var(--vscode-font-family);
-    font-size: var(--vscode-font-size);
-    color: var(--vscode-foreground);
-    padding: 14px; margin: 0; background: transparent;
+    font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground); padding: 14px; margin: 0; background: transparent;
   }
   header { margin-bottom: 14px; }
   header h1 { font-size: 15px; margin: 0 0 2px 0; font-weight: 600; letter-spacing: 0.01em; }
@@ -81,8 +150,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 
   details {
     border: 1px solid var(--vscode-panel-border, var(--vscode-input-border, #3c3c3c));
-    border-radius: var(--radius);
-    margin-bottom: 10px;
+    border-radius: var(--radius); margin-bottom: 10px;
     background: var(--vscode-editor-background);
   }
   details > summary {
@@ -94,13 +162,11 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   details[open] > summary .caret { transform: rotate(90deg); }
   details > summary .pill {
     margin-left: auto; font-weight: 500; font-size: 10px;
-    background: var(--vscode-badge-background);
-    color: var(--vscode-badge-foreground);
+    background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
     padding: 1px 8px; border-radius: 999px;
   }
   details > summary .pill.ok {
-    background: var(--vscode-testing-iconPassed, #3fb950);
-    color: #fff;
+    background: var(--vscode-testing-iconPassed, #3fb950); color: #fff;
   }
   .section-body { padding: 4px 12px 12px; }
 
@@ -109,66 +175,46 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   .hint { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
   input, textarea, select {
     width: 100%; box-sizing: border-box;
-    background: var(--vscode-input-background);
-    color: var(--vscode-input-foreground);
+    background: var(--vscode-input-background); color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border, transparent);
     border-radius: var(--radius); padding: 6px 8px;
     font-family: inherit; font-size: inherit;
   }
   textarea { resize: vertical; min-height: 60px; }
   input:focus, textarea:focus, select:focus {
-    outline: 1px solid var(--vscode-focusBorder);
-    border-color: var(--vscode-focusBorder);
+    outline: 1px solid var(--vscode-focusBorder); border-color: var(--vscode-focusBorder);
   }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
   .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--gap); }
 
-  /* Chips — capsules with a clearly visible selected state */
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip {
     padding: 4px 12px; border-radius: 999px;
     border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #555));
-    background: var(--vscode-input-background, transparent);
-    color: var(--vscode-foreground);
+    background: var(--vscode-input-background, transparent); color: var(--vscode-foreground);
     font-size: 11px; cursor: pointer; user-select: none;
     transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
   }
-  .chip:hover {
-    border-color: var(--vscode-focusBorder);
-  }
+  .chip:hover { border-color: var(--vscode-focusBorder); }
   .chip.selected {
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    border-color: var(--vscode-button-background);
-    font-weight: 600;
+    background: var(--vscode-button-background); color: var(--vscode-button-foreground);
+    border-color: var(--vscode-button-background); font-weight: 600;
   }
-  .chip.selected::before {
-    content: "✓ ";
-    font-weight: 700;
-  }
-  .chip.selected:hover {
-    background: var(--vscode-button-hoverBackground);
-    border-color: var(--vscode-button-hoverBackground);
-  }
+  .chip.selected::before { content: "✓ "; font-weight: 700; }
+  .chip.selected:hover { background: var(--vscode-button-hoverBackground); border-color: var(--vscode-button-hoverBackground); }
 
-  /* Radio-group (capsule-shaped segmented control) */
   .radio-group { display: flex; gap: 0; border: 1px solid var(--vscode-input-border, #555); border-radius: 999px; overflow: hidden; width: fit-content; }
   .radio-group label {
-    padding: 5px 14px; font-size: 11px; cursor: pointer; user-select: none;
+    padding: 0; font-size: 11px; cursor: pointer; user-select: none;
     color: var(--vscode-foreground); background: var(--vscode-input-background);
-    border-right: 1px solid var(--vscode-input-border, #555);
-    font-weight: 500;
+    border-right: 1px solid var(--vscode-input-border, #555); font-weight: 500;
   }
   .radio-group label:last-child { border-right: none; }
   .radio-group input[type="radio"] { display: none; }
   .radio-group input[type="radio"]:checked + .rlabel {
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
-    font-weight: 700;
+    background: var(--vscode-button-background); color: var(--vscode-button-foreground); font-weight: 700;
   }
-  .radio-group .rlabel {
-    padding: 5px 14px; display: inline-block; transition: background 80ms ease;
-  }
+  .radio-group .rlabel { padding: 5px 14px; display: inline-block; transition: background 80ms ease; }
   .radio-group .rlabel:hover { background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15)); }
 
   .group-title {
@@ -179,8 +225,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   .deliverables { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
   .del {
     border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #555));
-    border-radius: var(--radius);
-    padding: 9px; cursor: pointer; user-select: none;
+    border-radius: var(--radius); padding: 9px; cursor: pointer; user-select: none;
     display: flex; gap: 8px; align-items: flex-start;
     background: var(--vscode-input-background, transparent);
     transition: border-color 80ms ease, background 80ms ease;
@@ -199,12 +244,30 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     background: color-mix(in srgb, var(--vscode-button-background) 18%, transparent);
   }
   .del.selected .box {
-    background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+    background: var(--vscode-button-background); color: var(--vscode-button-foreground);
     border-color: var(--vscode-button-background);
   }
   .del .name { font-weight: 600; font-size: 12px; }
   .del .desc { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; line-height: 1.4; }
+
+  /* Deliverable options sub-panels */
+  .opts {
+    margin-top: 10px; border: 1px dashed var(--vscode-panel-border, #555);
+    border-radius: var(--radius); padding: 10px 12px;
+    background: color-mix(in srgb, var(--vscode-button-background) 6%, transparent);
+  }
+  .opts .opts-title {
+    font-weight: 700; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--vscode-foreground); margin-bottom: 8px;
+  }
+  .opts .opts-title::before { content: "⚙  "; opacity: 0.7; }
+  .opts[data-hidden="true"] { display: none; }
+
+  .toggle-row { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 6px; }
+  .toggle {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; user-select: none;
+  }
+  .toggle input[type="checkbox"] { margin: 0; accent-color: var(--vscode-button-background); }
 
   .actions {
     display: flex; gap: 8px; margin-top: 14px;
@@ -213,8 +276,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     padding: 10px 0 4px;
   }
   button.primary {
-    flex: 1; background: var(--vscode-button-background);
-    color: var(--vscode-button-foreground);
+    flex: 1; background: var(--vscode-button-background); color: var(--vscode-button-foreground);
     border: 0; padding: 9px 12px; border-radius: var(--radius);
     cursor: pointer; font-weight: 600;
   }
@@ -338,6 +400,118 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   <summary><span class="caret">▸</span> 4. Deliverables <span class="pill" id="pill-del">0 selected</span></summary>
   <div class="section-body">
     <div class="deliverables" id="delGrid"></div>
+
+    <!-- Lab options — visible only when 'lab' deliverable is selected -->
+    <div class="opts" id="labOpts" data-hidden="true">
+      <div class="opts-title">Lab options</div>
+      <div class="group-title" style="margin-top:0;">Sections to include per lab</div>
+      <div class="chips" id="labComponents"></div>
+      <div class="row3" style="margin-top:10px;">
+        <div class="field">
+          <label for="labCount">Number of labs</label>
+          <input id="labCount" type="number" min="1" max="20" />
+        </div>
+        <div class="field">
+          <label for="labRuntime">Script runtime</label>
+          <select id="labRuntime">
+            <option value="mixed" selected>Mixed (bash + pwsh where idiomatic)</option>
+            <option value="bash">bash only</option>
+            <option value="pwsh">PowerShell only</option>
+            <option value="actions">GitHub Actions workflows</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="labIac">IaC flavor</label>
+          <select id="labIac">
+            <option value="bicep" selected>Bicep</option>
+            <option value="azd">azd (+ Bicep)</option>
+            <option value="terraform">Terraform</option>
+            <option value="arm">ARM templates</option>
+            <option value="none">No IaC (az CLI only)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Lab depth</label>
+        <div class="radio-group">
+          <label><input type="radio" name="labDepth" value="standard"><span class="rlabel">Standard</span></label>
+          <label><input type="radio" name="labDepth" value="exhaustive" checked><span class="rlabel">Exhaustive (recommended)</span></label>
+        </div>
+      </div>
+      <div class="toggle-row">
+        <label class="toggle"><input type="checkbox" id="labTimings" checked>Per-step time estimates</label>
+        <label class="toggle"><input type="checkbox" id="labCost" checked>Cost summary &amp; cleanup</label>
+        <label class="toggle"><input type="checkbox" id="labSec" checked>Security review checklist</label>
+        <label class="toggle"><input type="checkbox" id="labOut" checked>Expected output per command</label>
+      </div>
+    </div>
+
+    <!-- Session options — visible only when 'session' deliverable is selected -->
+    <div class="opts" id="sessionOpts" data-hidden="true">
+      <div class="opts-title">Session material options</div>
+
+      <div class="group-title" style="margin-top:0;">Components to include</div>
+      <div class="chips" id="sessionComponents"></div>
+
+      <div class="field" style="margin-top:10px;">
+        <label for="sessionTopics">Topics / outline to cover</label>
+        <textarea id="sessionTopics" placeholder="One bullet per topic — e.g. 'Why GitHub Actions vs Azure Pipelines', 'Live demo: OIDC federation to Azure', 'Q&A on GHAS alert triage'…"></textarea>
+        <div class="hint">Forge will use these as the session's skeleton; leave empty to let Forge propose a full outline.</div>
+      </div>
+
+      <div class="row3">
+        <div class="field">
+          <label for="sessionStructure">Structure</label>
+          <select id="sessionStructure">
+            <option value="theory">Theory-heavy</option>
+            <option value="demo">Demo-heavy</option>
+            <option value="hands-on">Hands-on</option>
+            <option value="mixed" selected>Mixed</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="sessionSlides">Slide count (approx.)</label>
+          <input id="sessionSlides" type="number" min="3" max="120" />
+        </div>
+        <div class="field">
+          <label for="sessionIntro">Intro depth</label>
+          <select id="sessionIntro">
+            <option value="assume-expertise">Assume expertise</option>
+            <option value="light-intro" selected>Light intro</option>
+            <option value="full-intro">Full intro</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row3">
+        <div class="field">
+          <label for="sessionFormat">Format</label>
+          <select id="sessionFormat">
+            <option value="in-person">In-person</option>
+            <option value="virtual">Virtual</option>
+            <option value="hybrid" selected>Hybrid</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="sessionInteractivity">Interactivity</label>
+          <select id="sessionInteractivity">
+            <option value="low">Low (presentation)</option>
+            <option value="medium" selected>Medium (polls, Q&amp;A)</option>
+            <option value="high">High (workshop)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <span class="hint">Slide count is a target — Forge will adjust for duration.</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="sessionWrapUp">Wrap-up / takeaways</label>
+        <textarea id="sessionWrapUp" placeholder="What must the attendees be able to do or decide after the session? Follow-up offers, next-step CTAs, homework…"></textarea>
+      </div>
+    </div>
+
     <div class="field" style="margin-top:10px;">
       <label for="emphasis">Emphasis</label>
       <select id="emphasis">
@@ -384,6 +558,28 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     { id: "gatekeeper",   name: "Gatekeepers",  desc: "Validation scripts / GitHub Actions per challenge" }
   ];
 
+  const labComponents = [
+    { id: "prereqs",           label: "Prerequisites" },
+    { id: "role-assignments",  label: "Role assignments" },
+    { id: "provisioning",      label: "Provisioning (IaC)" },
+    { id: "app-deploy",        label: "App deploy" },
+    { id: "config",            label: "Configuration" },
+    { id: "gatekeeper-run",    label: "Gatekeeper run" },
+    { id: "troubleshooting",   label: "Troubleshooting" },
+    { id: "cleanup",           label: "Cleanup" }
+  ];
+  const sessionComponents = [
+    { id: "talk-track",         label: "Talk track (with timing)" },
+    { id: "slide-outline",      label: "Slide outline" },
+    { id: "speaker-notes",      label: "Speaker notes" },
+    { id: "demo-script",        label: "Demo script" },
+    { id: "workshop",           label: "Workshop exercises" },
+    { id: "qa-prompts",         label: "Q&A prompts" },
+    { id: "pre-reads",          label: "Pre-reads" },
+    { id: "follow-up",          label: "Post-session follow-up" },
+    { id: "recording-checklist",label: "Recording checklist" }
+  ];
+
   const TENANT_HINTS = {
     customer: "Generates IaC / commands that assume they will run inside the customer's own tenant and subscription. Scripts will use parameterized subscription / tenant / org placeholders and call out required customer consents.",
     microsoft: "Assumes you will dry-run this inside a Microsoft internal sandbox subscription where you already have Owner. Prefers short-lived resource groups and cleanup scripts.",
@@ -393,7 +589,9 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   const state = {
     compliance: new Set(),
     tech: new Set(),
-    deliverables: new Set(["lab","challenge","gatekeeper"])
+    deliverables: new Set(["lab","challenge","gatekeeper"]),
+    labComponents: new Set(${JSON.stringify([...LAB_COMPONENT_IDS])}),
+    sessionComponents: new Set(${JSON.stringify(DEFAULT_SESSION_OPTIONS.components)})
   };
 
   function loadState() {
@@ -405,12 +603,24 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
           if (el) el.value = prev.fields[k];
         }
         if (prev.tenant) {
-          const radio = document.querySelector('input[name="tenant"][value="' + prev.tenant + '"]');
-          if (radio) radio.checked = true;
+          const r = document.querySelector('input[name="tenant"][value="' + prev.tenant + '"]');
+          if (r) r.checked = true;
+        }
+        if (prev.labDepth) {
+          const r = document.querySelector('input[name="labDepth"][value="' + prev.labDepth + '"]');
+          if (r) r.checked = true;
+        }
+        if (prev.labToggles) {
+          for (const [id,v] of Object.entries(prev.labToggles)) {
+            const el = document.getElementById(id);
+            if (el) el.checked = !!v;
+          }
         }
         state.compliance = new Set(prev.compliance || []);
         state.tech = new Set(prev.tech || []);
         state.deliverables = new Set(prev.deliverables || ["lab","challenge","gatekeeper"]);
+        state.labComponents = new Set(prev.labComponents || [...state.labComponents]);
+        state.sessionComponents = new Set(prev.sessionComponents || [...state.sessionComponents]);
       }
     } catch {}
   }
@@ -419,27 +629,42 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     const r = document.querySelector('input[name="tenant"]:checked');
     return r ? r.value : "customer";
   }
+  function getLabDepth() {
+    const r = document.querySelector('input[name="labDepth"]:checked');
+    return r ? r.value : "exhaustive";
+  }
 
   function saveState() {
-    const fieldIds = ["customerName","industry","customerContext","constraints","duration","audience","skillLevel","emphasis","model"];
+    const fieldIds = ["customerName","industry","customerContext","constraints","duration","audience","skillLevel","emphasis","model",
+      "labCount","labRuntime","labIac",
+      "sessionTopics","sessionStructure","sessionSlides","sessionIntro","sessionFormat","sessionInteractivity","sessionWrapUp"];
     const fields = {};
     for (const id of fieldIds) {
       const el = document.getElementById(id);
       if (el) fields[id] = el.value;
     }
+    const labToggles = {};
+    for (const id of ["labTimings","labCost","labSec","labOut"]) {
+      const el = document.getElementById(id);
+      if (el) labToggles[id] = el.checked;
+    }
     vscode.setState({
       fields,
       tenant: getTenant(),
+      labDepth: getLabDepth(),
+      labToggles,
       compliance: [...state.compliance],
       tech: [...state.tech],
-      deliverables: [...state.deliverables]
+      deliverables: [...state.deliverables],
+      labComponents: [...state.labComponents],
+      sessionComponents: [...state.sessionComponents]
     });
   }
 
-  function chip(container, value, set, onToggle) {
+  function chip(container, value, label, set, onToggle) {
     const el = document.createElement("span");
     el.className = "chip" + (set.has(value) ? " selected" : "");
-    el.textContent = value;
+    el.textContent = label;
     el.onclick = () => {
       if (set.has(value)) { set.delete(value); el.classList.remove("selected"); }
       else { set.add(value); el.classList.add("selected"); }
@@ -448,11 +673,14 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     };
     container.appendChild(el);
   }
-
-  function renderChipGroup(containerId, items, set, onToggle) {
+  function renderChipGroup(containerId, items, set, onToggle, labelAccessor) {
     const c = document.getElementById(containerId);
     c.innerHTML = "";
-    for (const t of items) chip(c, t, set, onToggle);
+    for (const t of items) {
+      const value = typeof t === "string" ? t : t.id;
+      const label = typeof t === "string" ? t : (labelAccessor ? labelAccessor(t) : t.label);
+      chip(c, value, label, set, onToggle);
+    }
   }
 
   function updateTechPill() {
@@ -467,12 +695,16 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   }
   function updateCustomerPill() {
     const ok = document.getElementById("customerName").value.trim() && document.getElementById("customerContext").value.trim();
-    const pill = document.getElementById("pill-customer");
-    pill.textContent = ok ? "ready" : "required";
-    pill.classList.toggle("ok", !!ok);
+    const p = document.getElementById("pill-customer");
+    p.textContent = ok ? "ready" : "required";
+    p.classList.toggle("ok", !!ok);
   }
   function updateTenantHint() {
     document.getElementById("tenantHint").textContent = TENANT_HINTS[getTenant()] || "";
+  }
+  function updateOptsVisibility() {
+    document.getElementById("labOpts").dataset.hidden     = state.deliverables.has("lab") ? "false" : "true";
+    document.getElementById("sessionOpts").dataset.hidden = state.deliverables.has("session") ? "false" : "true";
   }
 
   function renderDeliverables() {
@@ -487,6 +719,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
         if (state.deliverables.has(d.id)) state.deliverables.delete(d.id); else state.deliverables.add(d.id);
         renderDeliverables();
         updateDelPill();
+        updateOptsVisibility();
         saveState();
       };
       grid.appendChild(el);
@@ -498,11 +731,11 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     renderChipGroup("azureChips", azure, state.tech, updateTechPill);
     renderChipGroup("githubChips", github, state.tech, updateTechPill);
     renderChipGroup("aiChips", aiData, state.tech, updateTechPill);
+    renderChipGroup("labComponents", labComponents, state.labComponents, () => saveState());
+    renderChipGroup("sessionComponents", sessionComponents, state.sessionComponents, () => saveState());
     renderDeliverables();
-    updateTechPill();
-    updateDelPill();
-    updateCustomerPill();
-    updateTenantHint();
+    updateTechPill(); updateDelPill(); updateCustomerPill();
+    updateTenantHint(); updateOptsVisibility();
   }
 
   function gather() {
@@ -519,7 +752,28 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       technologies: [...state.tech],
       deliverables: [...state.deliverables],
       emphasis: document.getElementById("emphasis").value,
-      model: document.getElementById("model").value
+      model: document.getElementById("model").value,
+      labOptions: {
+        components: [...state.labComponents],
+        runtime: document.getElementById("labRuntime").value,
+        iac: document.getElementById("labIac").value,
+        labCount: document.getElementById("labCount").value,
+        depth: getLabDepth(),
+        includeTimings: document.getElementById("labTimings").checked,
+        includeCost: document.getElementById("labCost").checked,
+        includeSecurityReview: document.getElementById("labSec").checked,
+        includeExpectedOutputs: document.getElementById("labOut").checked
+      },
+      sessionOptions: {
+        components: [...state.sessionComponents],
+        structure: document.getElementById("sessionStructure").value,
+        slideCount: document.getElementById("sessionSlides").value,
+        topics: document.getElementById("sessionTopics").value.trim(),
+        introDepth: document.getElementById("sessionIntro").value,
+        wrapUp: document.getElementById("sessionWrapUp").value.trim(),
+        format: document.getElementById("sessionFormat").value,
+        interactivity: document.getElementById("sessionInteractivity").value
+      }
     };
   }
 
@@ -528,8 +782,14 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     if (!b.customerContext) return "Customer context is required.";
     if (b.deliverables.length === 0) return "Select at least one deliverable.";
     if (b.technologies.length === 0) return "Select at least one technology.";
+    if (b.deliverables.includes("lab") && b.labOptions.components.length === 0) return "Select at least one lab section to include.";
+    if (b.deliverables.includes("session") && b.sessionOptions.components.length === 0) return "Select at least one session component.";
     return "";
   }
+
+  // Default values
+  document.getElementById("labCount").value = "3";
+  document.getElementById("sessionSlides").value = "20";
 
   document.getElementById("submit").onclick = () => {
     const brief = gather();
@@ -541,16 +801,28 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   };
   document.getElementById("reset").onclick = () => {
     vscode.setState(undefined);
-    for (const id of ["customerName","industry","customerContext","constraints"]) document.getElementById(id).value = "";
+    for (const id of ["customerName","industry","customerContext","constraints","sessionTopics","sessionWrapUp"]) document.getElementById(id).value = "";
     document.querySelector('input[name="tenant"][value="customer"]').checked = true;
+    document.querySelector('input[name="labDepth"][value="exhaustive"]').checked = true;
     document.getElementById("duration").selectedIndex = 2;
     document.getElementById("audience").selectedIndex = 0;
     document.getElementById("skillLevel").selectedIndex = 1;
     document.getElementById("emphasis").selectedIndex = 0;
     document.getElementById("model").selectedIndex = 0;
+    document.getElementById("labCount").value = "3";
+    document.getElementById("labRuntime").value = "mixed";
+    document.getElementById("labIac").value = "bicep";
+    for (const id of ["labTimings","labCost","labSec","labOut"]) document.getElementById(id).checked = true;
+    document.getElementById("sessionStructure").value = "mixed";
+    document.getElementById("sessionSlides").value = "20";
+    document.getElementById("sessionIntro").value = "light-intro";
+    document.getElementById("sessionFormat").value = "hybrid";
+    document.getElementById("sessionInteractivity").value = "medium";
     state.compliance.clear();
     state.tech.clear();
     state.deliverables = new Set(["lab","challenge","gatekeeper"]);
+    state.labComponents = new Set(${JSON.stringify([...LAB_COMPONENT_IDS])});
+    state.sessionComponents = new Set(${JSON.stringify(DEFAULT_SESSION_OPTIONS.components)});
     document.getElementById("error").textContent = "";
     renderAll();
   };
@@ -558,12 +830,24 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   ["customerName","customerContext"].forEach((id) => {
     document.getElementById(id).addEventListener("input", () => { updateCustomerPill(); saveState(); });
   });
-  ["industry","constraints","duration","audience","skillLevel","emphasis","model"].forEach((id) => {
-    document.getElementById(id).addEventListener("change", saveState);
+  [
+    "industry","constraints","duration","audience","skillLevel","emphasis","model",
+    "labCount","labRuntime","labIac",
+    "sessionTopics","sessionStructure","sessionSlides","sessionIntro","sessionFormat","sessionInteractivity","sessionWrapUp"
+  ].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("change", saveState);
+    if (el && (el.tagName === "TEXTAREA" || el.type === "number" || el.type === "text")) el.addEventListener("input", saveState);
   });
   document.querySelectorAll('input[name="tenant"]').forEach((r) => {
     r.addEventListener("change", () => { updateTenantHint(); saveState(); });
   });
+  document.querySelectorAll('input[name="labDepth"]').forEach((r) => {
+    r.addEventListener("change", saveState);
+  });
+  for (const id of ["labTimings","labCost","labSec","labOut"]) {
+    document.getElementById(id).addEventListener("change", saveState);
+  }
 
   loadState();
   renderAll();

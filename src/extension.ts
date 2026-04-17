@@ -4,7 +4,12 @@ import { SespSession } from "./sespSession";
 import { runWithVsCodeLm, runWithVsCodeLmTo } from "./lmFallback";
 import { HistoryStore, PlanHistoryEntry } from "./history";
 import { SespHistoryProvider, HistoryTreeItem } from "./historyView";
-import { SespPlannerViewProvider, CustomerBrief } from "./plannerView";
+import {
+  SespPlannerViewProvider,
+  CustomerBrief,
+  DEFAULT_LAB_OPTIONS,
+  DEFAULT_SESSION_OPTIONS
+} from "./plannerView";
 import { buildBriefPrompt, briefTitle } from "./briefPrompt";
 import { SespResultsPanel } from "./resultsPanel";
 import { autoSaveToWorkspace, createCustomerRepo } from "./customerRepo";
@@ -224,7 +229,9 @@ export function activate(context: vscode.ExtensionContext) {
       technologies: [],
       deliverables: deliverables.map((d) => d.value) as any,
       emphasis: "Balanced (architecture + hands-on)",
-      model: vscode.workspace.getConfiguration("sesp").get<string>("model") ?? "gpt-4.1"
+      model: vscode.workspace.getConfiguration("sesp").get<string>("model") ?? "gpt-4.1",
+      labOptions: { ...DEFAULT_LAB_OPTIONS },
+      sessionOptions: { ...DEFAULT_SESSION_OPTIONS }
     });
   };
 
