@@ -1,0 +1,137 @@
+{
+  "name": "sesp-session-planner",
+  "displayName": "Solution Engineer Session Planner (SESP)",
+  "description": "GitHub Copilot-powered VS Code extension that helps Solution Engineers plan hackathons, labs, sessions, and challenges across Azure and GitHub product suites.",
+  "version": "0.1.0",
+  "publisher": "sesp",
+  "engines": {
+    "vscode": "^1.95.0",
+    "node": ">=18"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "github copilot",
+    "copilot sdk",
+    "azure",
+    "hackathon",
+    "solution engineer",
+    "session planner"
+  ],
+  "activationEvents": [
+    "onChatParticipant:sesp.planner",
+    "onCommand:sesp.generateSessionPlan",
+    "onCommand:sesp.generateLab",
+    "onCommand:sesp.generateGatekeeper"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "chatParticipants": [
+      {
+        "id": "sesp.planner",
+        "name": "sesp",
+        "fullName": "Solution Engineer Session Planner",
+        "description": "Plan hackathons, labs, sessions, and challenges for Azure + GitHub.",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "hackathon",
+            "description": "Design a hackathon agenda with modules, challenges, and gatekeepers."
+          },
+          {
+            "name": "lab",
+            "description": "Generate a step-by-step infrastructure lab (how-to)."
+          },
+          {
+            "name": "challenge",
+            "description": "Generate a goal-oriented challenge (what-to-do) with hints."
+          },
+          {
+            "name": "onboarding",
+            "description": "Generate prerequisite checklist and environment setup scripts."
+          },
+          {
+            "name": "gatekeeper",
+            "description": "Generate a validation script / GitHub Action to verify completion."
+          },
+          {
+            "name": "architecture",
+            "description": "Mix and match Azure + GitHub products into a cohesive architecture."
+          }
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "sesp.generateSessionPlan",
+        "title": "SESP: Generate Full Session Plan",
+        "category": "SESP"
+      },
+      {
+        "command": "sesp.generateLab",
+        "title": "SESP: Generate Lab Guide",
+        "category": "SESP"
+      },
+      {
+        "command": "sesp.generateGatekeeper",
+        "title": "SESP: Generate Gatekeeper Validation",
+        "category": "SESP"
+      }
+    ],
+    "configuration": {
+      "title": "SESP",
+      "properties": {
+        "sesp.model": {
+          "type": "string",
+          "default": "gpt-4.1",
+          "enum": [
+            "gpt-4.1",
+            "claude-sonnet-4.5",
+            "gpt-5"
+          ],
+          "description": "Model used by the GitHub Copilot SDK session."
+        },
+        "sesp.useCopilotSdk": {
+          "type": "boolean",
+          "default": true,
+          "description": "Route requests through @github/copilot-sdk (requires Copilot CLI). If false, falls back to VS Code's Language Model API."
+        },
+        "sesp.cliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional path to the Copilot CLI executable. Leave empty to use the system PATH."
+        },
+        "sesp.cliUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional URL of a running Copilot CLI server (e.g., localhost:4321). When set, the SDK connects to this server instead of spawning one."
+        },
+        "sesp.enableGithubMcp": {
+          "type": "boolean",
+          "default": true,
+          "description": "Connect the session to GitHub's hosted MCP server for repo/issue/PR tools."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package --allow-missing-repository --skip-license",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@github/copilot-sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.0",
+    "@types/vscode": "^1.95.0",
+    "@vscode/vsce": "^3.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.5.4"
+  }
+}
