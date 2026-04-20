@@ -28,9 +28,10 @@ export class SespSession {
       const cfg = this.cfg();
       const cliPath = cfg.get<string>("cliPath") || undefined;
       const cliUrl = cfg.get<string>("cliUrl") || undefined;
+      const workIqUrl = cfg.get<string>("workIqMcpUrl") || undefined;
 
       this.output.appendLine(
-        `[sesp] starting Copilot SDK client (cliPath=${cliPath ?? "<PATH>"}, cliUrl=${cliUrl ?? "<spawn>"})`
+        `[sesp] starting Copilot SDK client (cliPath=${cliPath ?? "<PATH>"}, cliUrl=${cliUrl ?? "<spawn>"}, workIq=${workIqUrl ?? "<disabled>"})`
       );
 
       const sdk = await loadCopilotSdk();
@@ -53,6 +54,13 @@ export class SespSession {
       if (cfg.get<boolean>("enableGithubMcp")) {
         sessionConfig.mcpServers = {
           github: { type: "http", url: "https://api.githubcopilot.com/mcp/" }
+        };
+      }
+
+      if (cfg.get<boolean>("enableWorkIqMcp") && workIqUrl) {
+        sessionConfig.mcpServers = {
+          ...(sessionConfig.mcpServers as Record<string, unknown> | undefined),
+          workiq: { type: "http", url: workIqUrl }
         };
       }
 

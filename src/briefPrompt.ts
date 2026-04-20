@@ -54,6 +54,7 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
   lines.push("");
   lines.push(`**Customer:** ${brief.customerName}`);
   if (brief.industry) lines.push(`**Industry:** ${brief.industry}`);
+  lines.push(`**Preset:** ${brief.engagementPreset}`);
   lines.push(`**Audience:** ${brief.audience} (${brief.skillLevel})`);
   lines.push(`**Duration:** ${brief.duration}`);
   lines.push(`**Emphasis:** ${brief.emphasis}`);
@@ -64,6 +65,21 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
   lines.push("## Customer context");
   lines.push(brief.customerContext);
   lines.push("");
+  if (brief.conversationInsights.trim()) {
+    lines.push("## Conversation insights");
+    lines.push(
+      brief.useWorkIqInsights
+        ? "Blend the notes below with any WorkIQ conversation/customer insights available through MCP. If MCP data is unavailable, still honor these notes."
+        : "Use these notes as first-class planning context."
+    );
+    lines.push("");
+    lines.push(brief.conversationInsights.trim());
+    lines.push("");
+  } else if (brief.useWorkIqInsights) {
+    lines.push("## Conversation insights");
+    lines.push("If a WorkIQ MCP server is available, use it to pull relevant customer conversation insights, risks, open questions, and next-step signals before drafting the deliverables.");
+    lines.push("");
+  }
   if (brief.constraints || brief.complianceTags.length) {
     lines.push("## Constraints");
     if (brief.constraints) lines.push(brief.constraints);
@@ -77,7 +93,7 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
 
   lines.push("## Required deliverables");
   lines.push(
-    "Produce **all** of the following, each as its own top-level section with a clear `## ` heading. Every deliverable must be internally consistent with the others — the same resource names, regions, and identity model throughout."
+    "Produce **all** of the following, each as its own top-level section with a clear stable `## ` heading. Every deliverable must be internally consistent with the others — the same resource names, regions, and identity model throughout."
   );
   lines.push("");
   for (const d of brief.deliverables)
@@ -97,7 +113,7 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
 
   lines.push("## Output instructions");
   lines.push(
-    "Be concrete. Use real commands, real resource names prefixed with an abbreviation of the customer name, current API versions, cost/latency trade-offs, and secure defaults (managed identity over keys, least privilege, private networking where feasible). Use Mermaid for diagrams. Keep each script in a single consistent runtime (bash OR powershell OR a GitHub Actions workflow) and make it runnable top-to-bottom. When you reference a previous step's output, capture it into a variable and show how it is reused. Never claim something was 'done' without a gatekeeper check the participant can run."
+    "Be concrete. Use real commands, real resource names prefixed with an abbreviation of the customer name, current API versions, cost/latency trade-offs, and secure defaults (managed identity over keys, least privilege, private networking where feasible). Use Mermaid for diagrams. Keep each script in a single consistent runtime (bash OR powershell OR a GitHub Actions workflow) and make it runnable top-to-bottom. When you reference a previous step's output, capture it into a variable and show how it is reused. Never claim something was 'done' without a gatekeeper check the participant can run. Use stable section names so Forge can split the result into multiple files. For Labs use `### Lab N — Title`; for Challenges use `### Challenge N — Title`; for Hackathon agendas use `### Module N — Title`."
   );
   return lines.join("\n");
 }

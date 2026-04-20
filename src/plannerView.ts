@@ -36,6 +36,7 @@ export interface CustomerBrief {
   customerName: string;
   industry: string;
   customerContext: string;
+  conversationInsights: string;
   constraints: string;
   complianceTags: string[];
   tenant: "customer" | "microsoft" | "personal";
@@ -44,6 +45,8 @@ export interface CustomerBrief {
   duration: string;
   technologies: string[];
   deliverables: Deliverable[];
+  engagementPreset: "custom" | "workshop" | "briefing" | "hackathon" | "poc";
+  useWorkIqInsights: boolean;
   emphasis: string;
   model: string;
   labOptions: LabOptions;
@@ -288,6 +291,17 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     padding: 9px 12px; border-radius: var(--radius); cursor: pointer;
   }
   .error { color: var(--vscode-errorForeground); font-size: 11px; min-height: 14px; }
+  .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .preset-btn {
+    border: 1px solid var(--vscode-panel-border, #555);
+    background: var(--vscode-input-background, transparent);
+    color: var(--vscode-foreground);
+    border-radius: var(--radius);
+    padding: 10px; text-align: left; cursor: pointer;
+  }
+  .preset-btn strong { display: block; font-size: 12px; margin-bottom: 2px; }
+  .preset-btn small { color: var(--vscode-descriptionForeground); font-size: 11px; }
+  .preset-btn.active { border-color: var(--vscode-button-background); background: color-mix(in srgb, var(--vscode-button-background) 12%, transparent); }
 </style>
 </head>
 <body>
@@ -295,6 +309,14 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   <h1>Forge — Customer Engagement Studio</h1>
   <div class="sub">Brief the customer scenario — Forge generates every selected deliverable and drops it into your workspace.</div>
 </header>
+
+<details open>
+  <summary><span class="caret">▸</span> Quick presets <span class="pill">optional</span></summary>
+  <div class="section-body">
+    <div class="preset-grid" id="presetGrid"></div>
+    <div class="hint">Presets pre-select deliverables and defaults. You can still change everything afterward.</div>
+  </div>
+</details>
 
 <details open>
   <summary><span class="caret">▸</span> 1. Customer <span class="pill" id="pill-customer">required</span></summary>
@@ -326,6 +348,11 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       <label for="customerContext">Customer context</label>
       <textarea id="customerContext" placeholder="What's their current state, pain points, strategic goals, existing stack, cloud maturity, team size, motivation for this engagement…"></textarea>
     </div>
+    <div class="field">
+      <label for="conversationInsights">Conversation notes / insights</label>
+      <textarea id="conversationInsights" placeholder="Paste discovery-call notes, stakeholder concerns, objections, internal meeting notes, or WorkIQ-exported conversation snippets here…"></textarea>
+      <div class="hint">Used to ground the package in real customer conversations.</div>
+    </div>
   </div>
 </details>
 
@@ -347,6 +374,9 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       <label><input type="radio" name="tenant" value="personal"><span class="rlabel">Personal sandbox</span></label>
     </div>
     <div class="hint" id="tenantHint"></div>
+    <div class="toggle-row" style="margin-top:10px;">
+      <label class="toggle"><input type="checkbox" id="useWorkIqInsights">Use WorkIQ MCP insights if configured</label>
+    </div>
 
     <div class="row3" style="margin-top:10px;">
       <div class="field">
@@ -586,7 +616,15 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     personal: "Assumes a personal Azure subscription / GitHub user account. Prefers free tiers and low-cost SKUs; flags anything that needs a paid SKU."
   };
 
+  const presets = [
+    { id: "workshop", name: "Hands-on workshop", desc: "Labs + challenges + gatekeepers + onboarding" },
+    { id: "briefing", name: "Customer briefing", desc: "Session + architecture + follow-up package" },
+    { id: "hackathon", name: "Hackathon day", desc: "Agenda + labs + challenges + gatekeepers" },
+    { id: "poc", name: "POC package", desc: "Architecture + labs + onboarding + session handoff" }
+  ];
+
   const state = {
+    preset: "custom",
     compliance: new Set(),
     tech: new Set(),
     deliverables: new Set(["lab","challenge","gatekeeper"]),
@@ -616,6 +654,11 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
             if (el) el.checked = !!v;
           }
         }
+        if (prev.useWorkIqInsights) {
+          const workIqToggle = document.getElementById("useWorkIqInsights");
+          if (workIqToggle) workIqToggle.checked = !!prev.useWorkIqInsights;
+        }
+        if (prev.preset) state.preset = prev.preset;
         state.compliance = new Set(prev.compliance || []);
         state.tech = new Set(prev.tech || []);
         state.deliverables = new Set(prev.deliverables || ["lab","challenge","gatekeeper"]);
@@ -635,7 +678,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   }
 
   function saveState() {
-    const fieldIds = ["customerName","industry","customerContext","constraints","duration","audience","skillLevel","emphasis","model",
+    const fieldIds = ["customerName","industry","customerContext","conversationInsights","constraints","duration","audience","skillLevel","emphasis","model",
       "labCount","labRuntime","labIac",
       "sessionTopics","sessionStructure","sessionSlides","sessionIntro","sessionFormat","sessionInteractivity","sessionWrapUp"];
     const fields = {};
@@ -651,6 +694,8 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     vscode.setState({
       fields,
       tenant: getTenant(),
+      preset: state.preset,
+      useWorkIqInsights: document.getElementById("useWorkIqInsights").checked,
       labDepth: getLabDepth(),
       labToggles,
       compliance: [...state.compliance],
@@ -659,6 +704,45 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       labComponents: [...state.labComponents],
       sessionComponents: [...state.sessionComponents]
     });
+  }
+
+  function renderPresets() {
+    const grid = document.getElementById("presetGrid");
+    grid.innerHTML = "";
+    for (const preset of presets) {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "preset-btn" + (state.preset === preset.id ? " active" : "");
+      el.innerHTML = "<strong>" + preset.name + "</strong><small>" + preset.desc + "</small>";
+      el.onclick = () => applyPreset(preset.id);
+      grid.appendChild(el);
+    }
+  }
+
+  function applyPreset(presetId) {
+    state.preset = presetId;
+    if (presetId === "workshop") {
+      state.deliverables = new Set(["lab","challenge","gatekeeper","onboarding"]);
+      document.getElementById("emphasis").value = "Hands-on heavy";
+      document.getElementById("sessionStructure").value = "hands-on";
+    } else if (presetId === "briefing") {
+      state.deliverables = new Set(["session","architecture","onboarding"]);
+      document.getElementById("emphasis").value = "Architecture heavy";
+      document.getElementById("sessionStructure").value = "theory";
+    } else if (presetId === "hackathon") {
+      state.deliverables = new Set(["hackathon","lab","challenge","gatekeeper","onboarding"]);
+      document.getElementById("emphasis").value = "Balanced (architecture + hands-on)";
+      document.getElementById("sessionStructure").value = "mixed";
+    } else if (presetId === "poc") {
+      state.deliverables = new Set(["architecture","lab","onboarding","session"]);
+      document.getElementById("emphasis").value = "Balanced (architecture + hands-on)";
+      document.getElementById("sessionStructure").value = "demo";
+    }
+    renderPresets();
+    renderDeliverables();
+    updateDelPill();
+    updateOptsVisibility();
+    saveState();
   }
 
   function chip(container, value, label, set, onToggle) {
@@ -727,6 +811,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   }
 
   function renderAll() {
+    renderPresets();
     renderChipGroup("complianceChips", compliance, state.compliance, () => saveState());
     renderChipGroup("azureChips", azure, state.tech, updateTechPill);
     renderChipGroup("githubChips", github, state.tech, updateTechPill);
@@ -743,6 +828,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       customerName: document.getElementById("customerName").value.trim(),
       industry: document.getElementById("industry").value,
       customerContext: document.getElementById("customerContext").value.trim(),
+      conversationInsights: document.getElementById("conversationInsights").value.trim(),
       constraints: document.getElementById("constraints").value.trim(),
       complianceTags: [...state.compliance],
       tenant: getTenant(),
@@ -751,6 +837,8 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       duration: document.getElementById("duration").value,
       technologies: [...state.tech],
       deliverables: [...state.deliverables],
+      engagementPreset: state.preset,
+      useWorkIqInsights: document.getElementById("useWorkIqInsights").checked,
       emphasis: document.getElementById("emphasis").value,
       model: document.getElementById("model").value,
       labOptions: {
@@ -801,9 +889,10 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   };
   document.getElementById("reset").onclick = () => {
     vscode.setState(undefined);
-    for (const id of ["customerName","industry","customerContext","constraints","sessionTopics","sessionWrapUp"]) document.getElementById(id).value = "";
+    for (const id of ["customerName","industry","customerContext","conversationInsights","constraints","sessionTopics","sessionWrapUp"]) document.getElementById(id).value = "";
     document.querySelector('input[name="tenant"][value="customer"]').checked = true;
     document.querySelector('input[name="labDepth"][value="exhaustive"]').checked = true;
+    document.getElementById("useWorkIqInsights").checked = false;
     document.getElementById("duration").selectedIndex = 2;
     document.getElementById("audience").selectedIndex = 0;
     document.getElementById("skillLevel").selectedIndex = 1;
@@ -818,6 +907,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     document.getElementById("sessionIntro").value = "light-intro";
     document.getElementById("sessionFormat").value = "hybrid";
     document.getElementById("sessionInteractivity").value = "medium";
+    state.preset = "custom";
     state.compliance.clear();
     state.tech.clear();
     state.deliverables = new Set(["lab","challenge","gatekeeper"]);
@@ -827,7 +917,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     renderAll();
   };
 
-  ["customerName","customerContext"].forEach((id) => {
+  ["customerName","customerContext","conversationInsights"].forEach((id) => {
     document.getElementById(id).addEventListener("input", () => { updateCustomerPill(); saveState(); });
   });
   [
@@ -848,6 +938,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   for (const id of ["labTimings","labCost","labSec","labOut"]) {
     document.getElementById(id).addEventListener("change", saveState);
   }
+  document.getElementById("useWorkIqInsights").addEventListener("change", saveState);
 
   loadState();
   renderAll();
