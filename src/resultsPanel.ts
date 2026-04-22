@@ -7,12 +7,13 @@ import * as vscode from "vscode";
  */
 export class SespResultsPanel {
   public readonly onDidClose = new vscode.EventEmitter<void>();
-  public readonly onAction = new vscode.EventEmitter<"createRepo" | "reveal">();
+  public readonly onAction = new vscode.EventEmitter<"createRepo" | "reveal" | "cancel">();
 
   private panel: vscode.WebviewPanel;
   private buffer = "";
   private title: string;
   private savedUri?: vscode.Uri;
+  private savePackageHandler?: () => Promise<vscode.Uri | undefined>;
 
   static create(title: string, extensionUri: vscode.Uri): SespResultsPanel {
     return new SespResultsPanel(title, extensionUri);
@@ -34,6 +35,7 @@ export class SespResultsPanel {
       else if (msg?.type === "copy") await vscode.env.clipboard.writeText(this.buffer);
       else if (msg?.type === "openMarkdown") await this.openMarkdown();
       else if (msg?.type === "createRepo") this.onAction.fire("createRepo");
+      else if (msg?.type === "cancel") this.onAction.fire("cancel");
       else if (msg?.type === "revealSaved" && this.savedUri) {
         await vscode.commands.executeCommand("revealInExplorer", this.savedUri);
       }
@@ -77,11 +79,29 @@ export class SespResultsPanel {
     return this.buffer;
   }
 
+  setSavePackageHandler(handler: () => Promise<vscode.Uri | undefined>) {
+    this.savePackageHandler = handler;
+  }
+
   private safeFilename(): string {
     return this.title.replace(/[^\w\-]+/g, "_").slice(0, 80) || "forge-plan";
   }
 
   private async saveToWorkspace() {
+    if (this.savePackageHandler) {
+      const uri = await this.savePackageHandler();
+      if (!uri) return;
+      this.notifySaved(uri);
+      const reveal = await vscode.window.showInformationMessage(
+        `Saved package to ${uri.fsPath}`,
+        "Reveal"
+      );
+      if (reveal === "Reveal") {
+        await vscode.commands.executeCommand("revealInExplorer", uri);
+      }
+      return;
+    }
+
     const ws = vscode.workspace.workspaceFolders?.[0];
     const defaultUri = ws
       ? vscode.Uri.joinPath(ws.uri, `${this.safeFilename()}.md`)
@@ -200,7 +220,8 @@ export class SespResultsPanel {
   <div class="status" id="status">Starting…</div>
   <button id="copyBtn">Copy</button>
   <button id="openBtn">Open as .md</button>
-  <button id="saveBtn">Save as…</button>
+  <button id="cancelBtn" style="color:var(--vscode-errorForeground);border-color:var(--vscode-errorForeground);">Cancel</button>
+  <button id="saveBtn">Export package…</button>
   <button class="primary" id="repoBtn" disabled>Create customer repo</button>
 </div>
 <div class="saved-banner" id="savedBanner"></div>
@@ -212,6 +233,7 @@ export class SespResultsPanel {
   const content = document.getElementById("content");
   const status = document.getElementById("status");
   const repoBtn = document.getElementById("repoBtn");
+  const cancelBtn = document.getElementById("cancelBtn");
   const banner = document.getElementById("savedBanner");
   let buffer = "";
   let streaming = true;
@@ -230,7 +252,7 @@ export class SespResultsPanel {
     const m = e.data;
     if (m.type === "delta") { buffer += m.delta; render(); }
     else if (m.type === "status") { status.textContent = m.text; }
-    else if (m.type === "done") { streaming = false; status.textContent = "Done"; repoBtn.disabled = false; render(); }
+    else if (m.type === "done") { streaming = false; status.textContent = "Done"; repoBtn.disabled = false; cancelBtn.style.display = "none"; render(); }
     else if (m.type === "saved") {
       banner.classList.add("visible");
       banner.innerHTML = 'Saved package to <code>' + m.path + '</code><a id="revealLink">Reveal in Explorer</a>';
@@ -241,6 +263,7 @@ export class SespResultsPanel {
   document.getElementById("copyBtn").onclick = () => vscode.postMessage({ type: "copy" });
   document.getElementById("saveBtn").onclick = () => vscode.postMessage({ type: "save" });
   document.getElementById("openBtn").onclick = () => vscode.postMessage({ type: "openMarkdown" });
+  cancelBtn.onclick = () => vscode.postMessage({ type: "cancel" });
   repoBtn.onclick = () => vscode.postMessage({ type: "createRepo" });
 </script>
 </body>

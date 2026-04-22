@@ -9,6 +9,7 @@ export interface PlanHistoryEntry {
   brief?: CustomerBrief;
   summary: string;
   markdown?: string;
+  status?: "pending" | "complete" | "failed";
 }
 
 const KEY = "sesp.history.v2";

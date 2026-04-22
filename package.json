@@ -2,7 +2,7 @@
   "name": "sesp-session-planner",
   "displayName": "Forge — Customer Engagement Studio",
   "description": "GitHub Copilot-powered engagement studio for Solution Engineers. Brief a customer once, generate hackathons, end-to-end labs, challenges with acceptance criteria, gatekeepers, and architecture — auto-saved into your workspace and optionally published as a customer-sharable repo.",
-  "version": "0.6.2",
+  "version": "0.7.0",
   "publisher": "sesp",
   "engines": {
     "vscode": "^1.95.0",
@@ -287,6 +287,11 @@
           ],
           "default": "private",
           "description": "Default visibility when creating a customer-sharable GitHub repository via the 'Create customer repo' action."
+        },
+        "sesp.sdkTimeoutMs": {
+          "type": "number",
+          "default": 120000,
+          "description": "Timeout in milliseconds for SDK generation requests. Increase if you encounter timeouts on large briefs."
         }
       }
     }

@@ -82,6 +82,8 @@ describe("buildBriefPrompt", () => {
     expect(p).toContain("numbered micro-steps");
     expect(p).toContain("Hands-on exercises");
     expect(p).toContain("Stretch goal");
+    expect(p).toContain("labs/lab-01/README.md");
+    expect(p).toContain("at least **10 numbered micro-steps**");
   });
 
   it("requires repo-ready file artifacts and workspace structure", () => {

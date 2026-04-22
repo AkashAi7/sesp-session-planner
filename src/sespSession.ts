@@ -132,7 +132,23 @@ export class SespSession {
     });
 
     try {
-      await this.session.sendAndWait({ prompt });
+      const timeoutMs = this.cfg().get<number>("sdkTimeoutMs") ?? 120_000;
+      const sendPromise = this.session.sendAndWait({ prompt });
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        const id = setTimeout(
+          () => reject(new Error(`SDK response timed out after ${timeoutMs / 1000}s. You can increase sesp.sdkTimeoutMs in settings.`)),
+          timeoutMs
+        );
+        // Clear timeout if cancellation is requested
+        token.onCancellationRequested(() => clearTimeout(id));
+      });
+
+      const cancelPromise = new Promise<never>((_, reject) => {
+        token.onCancellationRequested(() => reject(new Error("Generation cancelled by user.")));
+      });
+
+      await Promise.race([sendPromise, timeoutPromise, cancelPromise]);
       await Promise.race([idlePromise, new Promise<void>((r) => setTimeout(r, 50))]);
     } finally {
       try {

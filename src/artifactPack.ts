@@ -115,8 +115,15 @@ function extractFileArtifacts(markdown: string): GeneratedArtifact[] {
 }
 
 function extractFileContent(block: string): string {
-  const fenced = block.match(/^```[^\n]*\n([\s\S]*?)\n```/m);
-  if (fenced) return fenced[1].trimEnd();
+  // Handle nested fences by matching the outermost fence block properly.
+  // Count the backtick length of the opening fence and match the same-length close.
+  const fencedMatch = block.match(/^(`{3,})([^\n]*)\n([\s\S]*?)\n\1\s*$/m);
+  if (fencedMatch) return fencedMatch[3].trimEnd();
+
+  // Fallback: try standard triple-backtick (non-greedy across potential inner fences)
+  const simple = block.match(/^```[^\n]*\n([\s\S]*?)\n```\s*$/m);
+  if (simple) return simple[1].trimEnd();
+
   return block.trim();
 }
 

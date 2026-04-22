@@ -423,6 +423,12 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     <div class="chips" id="githubChips"></div>
     <div class="group-title">AI / Data</div>
     <div class="chips" id="aiChips"></div>
+    <div class="field" style="margin-top:10px;">
+      <label for="customTech">Custom technologies</label>
+      <input id="customTech" placeholder="Type a technology name and press Enter…" />
+      <div class="chips" id="customTechChips" style="margin-top:6px;"></div>
+      <div class="hint">Add technologies not in the lists above (e.g. Dapr, Pulumi, Redis).</div>
+    </div>
   </div>
 </details>
 
@@ -627,6 +633,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     preset: "custom",
     compliance: new Set(),
     tech: new Set(),
+    customTech: new Set(),
     deliverables: new Set(["lab","challenge","gatekeeper"]),
     labComponents: new Set(${JSON.stringify([...LAB_COMPONENT_IDS])}),
     sessionComponents: new Set(${JSON.stringify(DEFAULT_SESSION_OPTIONS.components)})
@@ -661,6 +668,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
         if (prev.preset) state.preset = prev.preset;
         state.compliance = new Set(prev.compliance || []);
         state.tech = new Set(prev.tech || []);
+        state.customTech = new Set(prev.customTech || []);
         state.deliverables = new Set(prev.deliverables || ["lab","challenge","gatekeeper"]);
         state.labComponents = new Set(prev.labComponents || [...state.labComponents]);
         state.sessionComponents = new Set(prev.sessionComponents || [...state.sessionComponents]);
@@ -700,6 +708,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       labToggles,
       compliance: [...state.compliance],
       tech: [...state.tech],
+      customTech: [...state.customTech],
       deliverables: [...state.deliverables],
       labComponents: [...state.labComponents],
       sessionComponents: [...state.sessionComponents]
@@ -769,8 +778,9 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 
   function updateTechPill() {
     const p = document.getElementById("pill-tech");
-    p.textContent = state.tech.size + " selected";
-    p.classList.toggle("ok", state.tech.size > 0);
+    const count = state.tech.size + state.customTech.size;
+    p.textContent = count + " selected";
+    p.classList.toggle("ok", count > 0);
   }
   function updateDelPill() {
     const p = document.getElementById("pill-del");
@@ -818,10 +828,42 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     renderChipGroup("aiChips", aiData, state.tech, updateTechPill);
     renderChipGroup("labComponents", labComponents, state.labComponents, () => saveState());
     renderChipGroup("sessionComponents", sessionComponents, state.sessionComponents, () => saveState());
+    renderCustomTechChips();
     renderDeliverables();
     updateTechPill(); updateDelPill(); updateCustomerPill();
     updateTenantHint(); updateOptsVisibility();
   }
+
+  function renderCustomTechChips() {
+    const c = document.getElementById("customTechChips");
+    c.innerHTML = "";
+    for (const t of state.customTech) {
+      const el = document.createElement("span");
+      el.className = "chip selected";
+      el.textContent = t;
+      el.onclick = () => {
+        state.customTech.delete(t);
+        renderCustomTechChips();
+        updateTechPill();
+        saveState();
+      };
+      c.appendChild(el);
+    }
+  }
+  document.getElementById("customTech").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const input = e.target;
+      const val = input.value.trim();
+      if (val && !state.tech.has(val) && !state.customTech.has(val)) {
+        state.customTech.add(val);
+        renderCustomTechChips();
+        updateTechPill();
+        saveState();
+      }
+      input.value = "";
+    }
+  });
 
   function gather() {
     return {
@@ -835,7 +877,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       audience: document.getElementById("audience").value,
       skillLevel: document.getElementById("skillLevel").value,
       duration: document.getElementById("duration").value,
-      technologies: [...state.tech],
+      technologies: [...state.tech, ...state.customTech],
       deliverables: [...state.deliverables],
       engagementPreset: state.preset,
       useWorkIqInsights: document.getElementById("useWorkIqInsights").checked,
@@ -872,6 +914,10 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     if (b.technologies.length === 0) return "Select at least one technology.";
     if (b.deliverables.includes("lab") && b.labOptions.components.length === 0) return "Select at least one lab section to include.";
     if (b.deliverables.includes("session") && b.sessionOptions.components.length === 0) return "Select at least one session component.";
+    // Contradiction checks
+    const govCompliance = b.complianceTags.some(t => t === "FedRAMP" || t === "Azure Gov");
+    if (govCompliance && b.tenant === "personal") return "FedRAMP / Azure Gov is incompatible with personal sandbox. Use customer or Microsoft tenant.";
+    if (b.deliverables.includes("gatekeeper") && !b.deliverables.includes("challenge") && !b.deliverables.includes("lab")) return "Gatekeepers need at least one challenge or lab to validate.";
     return "";
   }
 
@@ -910,6 +956,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     state.preset = "custom";
     state.compliance.clear();
     state.tech.clear();
+    state.customTech.clear();
     state.deliverables = new Set(["lab","challenge","gatekeeper"]);
     state.labComponents = new Set(${JSON.stringify([...LAB_COMPONENT_IDS])});
     state.sessionComponents = new Set(${JSON.stringify(DEFAULT_SESSION_OPTIONS.components)});

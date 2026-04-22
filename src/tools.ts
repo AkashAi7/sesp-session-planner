@@ -88,6 +88,47 @@ export const toolSpecs: SespToolSpec[] = [
     })
   },
   {
+    name: "fetch_workiq_materials",
+    description:
+      "Query WorkIQ for prior materials related to a customer or topic — presentations, slide decks, shared documents, meeting recordings, and demo artifacts. Returns a structured list of discovered materials the model can reference when building deliverables.",
+    parameters: {
+      type: "object",
+      properties: {
+        customerName: {
+          type: "string",
+          description: "The customer name to search for in WorkIQ."
+        },
+        topics: {
+          type: "array",
+          items: { type: "string" },
+          description: "Topics or technologies to filter materials by (e.g., 'AKS migration', 'GitHub Actions CI/CD')."
+        },
+        fileTypes: {
+          type: "array",
+          items: { type: "string" },
+          description: "File types to look for (e.g., 'pptx', 'pdf', 'docx', 'mp4')."
+        }
+      },
+      required: ["customerName"]
+    },
+    handler: async (args: { customerName: string; topics?: string[]; fileTypes?: string[] }) => ({
+      customerName: args.customerName,
+      topics: args.topics ?? [],
+      requestedFileTypes: args.fileTypes ?? ["pptx", "pdf", "docx"],
+      instruction:
+        "Use WorkIQ MCP to search for presentations, slide decks, documents, and recordings " +
+        "related to this customer and these topics. Return titles, dates, authors, file types, " +
+        "and a brief summary of each discovered material. If no WorkIQ MCP server is configured, " +
+        "return an empty list and note that WorkIQ is not available.",
+      materialCategories: [
+        { category: "presentations", extensions: [".pptx", ".ppt", ".key"], description: "Slide decks and presentations" },
+        { category: "documents", extensions: [".docx", ".pdf", ".md"], description: "Written documents, proposals, and briefs" },
+        { category: "recordings", extensions: [".mp4", ".webm"], description: "Meeting recordings and demo videos" },
+        { category: "demos", extensions: [".zip", ".repo"], description: "Demo repos and packaged artifacts" }
+      ]
+    })
+  },
+  {
     name: "generate_onboarding_plan",
     description:
       "Return a structured onboarding / prerequisite checklist for a session (tooling, quotas, RBAC, identity).",

@@ -10,7 +10,7 @@ import {
   DEFAULT_LAB_OPTIONS,
   DEFAULT_SESSION_OPTIONS
 } from "./plannerView";
-import { buildBriefPrompt, briefTitle } from "./briefPrompt";
+import { buildBriefPrompt, briefTitle, validateBrief } from "./briefPrompt";
 import { SespResultsPanel } from "./resultsPanel";
 import { autoSaveToWorkspace, createCustomerRepo } from "./customerRepo";
 
@@ -43,12 +43,19 @@ export function activate(context: vscode.ExtensionContext) {
     const visibility = cfg.get<"private" | "internal" | "public">("customerRepoDefaultVisibility", "private");
 
     const panel = SespResultsPanel.create(title, context.extensionUri);
+    if (brief) {
+      panel.setSavePackageHandler(() => autoSaveToWorkspace(brief, panel.markdown));
+    }
     panel.setStatus(useSdk ? "Planning with Copilot SDK…" : "Planning with VS Code LM…");
 
     const tokenSource = new vscode.CancellationTokenSource();
     panel.onDidClose.event(() => tokenSource.cancel());
     panel.onAction.event(async (action) => {
-      if (action === "createRepo" && brief) {
+      if (action === "cancel") {
+        tokenSource.cancel();
+        panel.setStatus("Cancelled");
+        panel.done();
+      } else if (action === "createRepo" && brief) {
         await createCustomerRepo({
           brief,
           markdown: panel.markdown,
@@ -154,6 +161,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // ---------- Planner webview submission ----------
   const submitBrief = async (brief: CustomerBrief) => {
+    const validationError = validateBrief(brief);
+    if (validationError) {
+      vscode.window.showWarningMessage(`Brief validation: ${validationError}`);
+      return;
+    }
     const title = briefTitle(brief);
     const prompt = buildBriefPrompt(brief);
     const entry: PlanHistoryEntry = {
@@ -162,11 +174,19 @@ export function activate(context: vscode.ExtensionContext) {
       kind: "brief",
       createdAt: Date.now(),
       brief,
-      summary: brief.customerContext.slice(0, 240)
+      summary: brief.customerContext.slice(0, 240),
+      status: "pending"
     };
     await store.add(entry);
     historyProvider.refresh();
-    await generateToPanel(title, prompt, brief, entry.id);
+    try {
+      await generateToPanel(title, prompt, brief, entry.id);
+      await store.update(entry.id, { status: "complete" });
+    } catch (err: any) {
+      await store.update(entry.id, { status: "failed" });
+      output.appendLine(`[forge] generation failed for ${entry.id}: ${err?.message ?? err}`);
+    }
+    historyProvider.refresh();
   };
 
   const plannerProvider = new SespPlannerViewProvider(context.extensionUri, submitBrief);

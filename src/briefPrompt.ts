@@ -48,6 +48,31 @@ export function briefTitle(brief: CustomerBrief): string {
   return `${brief.customerName} — ${kinds || "engagement"}`;
 }
 
+/** Validate a brief for contradictions and missing required fields. Returns empty string if valid. */
+export function validateBrief(brief: CustomerBrief): string {
+  if (!brief.customerName.trim()) return "Customer name is required.";
+  if (!brief.customerContext.trim()) return "Customer context is required.";
+  if (brief.deliverables.length === 0) return "Select at least one deliverable.";
+  if (brief.technologies.length === 0) return "Select at least one technology.";
+
+  if (brief.deliverables.includes("lab") && brief.labOptions.components.length === 0)
+    return "Select at least one lab section to include.";
+  if (brief.deliverables.includes("session") && brief.sessionOptions.components.length === 0)
+    return "Select at least one session component.";
+
+  // Contradiction checks
+  const govCompliance = brief.complianceTags.some((t) =>
+    ["FedRAMP", "Azure Gov"].includes(t)
+  );
+  if (govCompliance && brief.tenant === "personal")
+    return "FedRAMP / Azure Gov compliance is incompatible with a personal sandbox tenant. Use a customer or Microsoft tenant.";
+
+  if (brief.deliverables.includes("gatekeeper") && !brief.deliverables.includes("challenge") && !brief.deliverables.includes("lab"))
+    return "Gatekeepers require at least one challenge or lab to validate against. Add a challenge or lab.";
+
+  return "";
+}
+
 export function buildBriefPrompt(brief: CustomerBrief): string {
   const lines: string[] = [];
   lines.push("# Customer Engagement Brief");
@@ -78,6 +103,17 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
   } else if (brief.useWorkIqInsights) {
     lines.push("## Conversation insights");
     lines.push("If a WorkIQ MCP server is available, use it to pull relevant customer conversation insights, risks, open questions, and next-step signals before drafting the deliverables.");
+    lines.push("");
+  }
+  if (brief.useWorkIqInsights) {
+    lines.push("## Prior materials discovery");
+    lines.push(
+      "If a WorkIQ MCP server is available, also query for **related presentations** (.pptx, .pdf), "
+      + "**slide decks**, **shared documents**, **meeting recordings**, and **demo artifacts** associated with this customer or topic. "
+      + "Surface any discovered materials as a \"Prior Materials\" section so the generated plan can reference, build on, "
+      + "or extend existing decks rather than starting from scratch. If prior presentations are found, list them with titles, "
+      + "dates, and key topics covered, then note which parts of the new deliverables overlap and where the SE can reuse slides."
+    );
     lines.push("");
   }
   if (brief.constraints || brief.complianceTags.length) {
@@ -136,6 +172,8 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
   lines.push("- Immediately under each file heading, include the full file contents in a fenced code block if it is code/config/script, or plain markdown body if it is a markdown/text file.");
   lines.push("- Do not use placeholders like `path/to/file`. Use realistic repo-relative paths such as `infra/main.bicep`, `scripts/bootstrap/check-prereqs.ps1`, `.github/workflows/gatekeeper-lab-01.yml`, `labs/lab-01/README.md`, `challenges/challenge-01.md`, or `session/demo-script.md`.");
   lines.push("- For every selected utility/deliverable, produce at least one concrete file artifact. For Labs and Challenges, produce multiple files when appropriate, not one monolithic file.");
+  lines.push("- For every lab, emit at minimum `labs/lab-0N/README.md` plus at least one supporting file such as `validation.yml`, `check-prereqs.ps1`, `variables.env`, `main.bicep`, or `deploy.sh`.");
+  lines.push("- For every challenge, emit at minimum `challenges/challenge-0N.md` plus a validator/workflow/checklist file.");
   lines.push("- Prefer separate folders and files over giant catch-all markdown sections. The narrative should explain the package, but the package itself should be file-oriented.");
   return lines.join("\n");
 }
@@ -231,7 +269,10 @@ function renderLabSpec(opts: LabOptions, technologies: string[]): string {
     "8. **Next lab handoff** — what state this lab leaves the environment in and which variables/outputs feed the next lab (name them explicitly).",
     "",
     "**Hard requirements for every lab:**",
+    "- Each lab must materialize as a folder such as `labs/lab-01/` with a detailed `README.md` and supporting files/scripts/workflows/configs required to run it.",
+    "- Each `labs/lab-0N/README.md` must contain at least **10 numbered micro-steps** unless the scenario is genuinely tiny; do not collapse a whole lab into a few bullets or one-liners.",
     "- **Break every section into numbered micro-steps** (1.1, 1.2, 1.3 …). Each micro-step has: purpose (one sentence) → command block → expected output → \"why this works\" note. No unlabeled walls of code.",
+    "- After every file edit, command, deployment, or validation step, show the expected output or resulting state explicitly. Single-line instructions without command/output detail are not acceptable.",
     "- Every prerequisite must be verifiable with a command that prints PASS/FAIL.",
     "- Every role assignment is spelled out as a concrete `az role assignment create …` command (or equivalent) with the principal ID captured into a variable first.",
     "- If step N depends on output from step N-1, show the exact `$VAR=$(…)` capture (bash) or `$var = (…)` (pwsh) so participants can copy-paste without guessing. **Never** write `<your-resource-name>` placeholders mid-lab — resolve them via capture.",

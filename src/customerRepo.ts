@@ -119,14 +119,37 @@ export async function createCustomerRepo(opts: {
     { location: vscode.ProgressLocation.Notification, title: `Creating repo ${repoName}`, cancellable: false },
     async (prog) => {
       try {
+        // Check gh CLI is available
+        try {
+          await run("gh", ["--version"], cwd, output);
+        } catch {
+          vscode.window.showErrorMessage(
+            "GitHub CLI (`gh`) is not installed or not on PATH. Install it from https://cli.github.com/ and run `gh auth login`."
+          );
+          return;
+        }
+
         prog.report({ message: "Initializing git" });
         await run("git", ["init", "-b", "main"], cwd, output);
         await run("git", ["add", "."], cwd, output);
+
+        // Respect user's git config if available, fall back to Forge defaults
+        let userName = "Forge";
+        let userEmail = "forge@users.noreply.github.com";
+        try {
+          const { stdout: configName } = await run("git", ["config", "user.name"], cwd, output);
+          if (configName.trim()) userName = configName.trim();
+        } catch { /* no global config, use default */ }
+        try {
+          const { stdout: configEmail } = await run("git", ["config", "user.email"], cwd, output);
+          if (configEmail.trim()) userEmail = configEmail.trim();
+        } catch { /* no global config, use default */ }
+
         await run(
           "git",
           [
-            "-c", "user.email=forge@users.noreply.github.com",
-            "-c", "user.name=Forge",
+            "-c", `user.email=${userEmail}`,
+            "-c", `user.name=${userName}`,
             "commit", "-m", "Initial engagement materials"
           ],
           cwd,
@@ -158,6 +181,13 @@ export async function createCustomerRepo(opts: {
         vscode.window.showErrorMessage(
           `Failed to create repo: ${err?.message ?? err}. See the Forge output channel.`
         );
+        // Clean up orphaned staging directory on failure
+        try {
+          await vscode.workspace.fs.delete(stagingDir, { recursive: true, useTrash: false });
+          output.appendLine(`[forge] cleaned up staging dir: ${stagingDir.fsPath}`);
+        } catch {
+          output.appendLine(`[forge] could not clean up staging dir: ${stagingDir.fsPath}`);
+        }
       }
     }
   );

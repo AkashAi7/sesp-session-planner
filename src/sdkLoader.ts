@@ -4,6 +4,7 @@
 
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { pathToFileURL } from "node:url";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let cached: any | undefined;
@@ -12,27 +13,26 @@ let compatPatched = false;
 
 export async function loadCopilotSdk(): Promise<any> {
   if (!cached) {
-    await ensureCopilotSdkCompat();
+    const sdkDistDir = await ensureCopilotSdkCompat();
     // eslint-disable-next-line @typescript-eslint/no-implied-eval
     cached = await (new Function("s", "return import(s)") as (s: string) => Promise<any>)(
-      "@github/copilot-sdk"
+      pathToFileURL(path.join(sdkDistDir, "index.js")).href
     );
   }
   return cached;
 }
 
-async function ensureCopilotSdkCompat(): Promise<void> {
-  if (compatPatched) return;
+async function ensureCopilotSdkCompat(): Promise<string> {
+  const sdkDistDir = path.resolve(__dirname, "..", "node_modules", "@github", "copilot-sdk", "dist");
+  if (compatPatched) return sdkDistDir;
 
-  const requireForResolve = eval("require") as NodeRequire;
-  const sdkEntry = requireForResolve.resolve("@github/copilot-sdk");
-  const sdkDistDir = path.dirname(sdkEntry);
   const sessionJsPath = path.join(sdkDistDir, "session.js");
   const sessionDtsPath = path.join(sdkDistDir, "session.d.ts");
 
   await patchImportPath(sessionJsPath);
   await patchImportPath(sessionDtsPath);
   compatPatched = true;
+  return sdkDistDir;
 }
 
 async function patchImportPath(filePath: string): Promise<void> {
