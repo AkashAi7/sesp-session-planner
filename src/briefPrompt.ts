@@ -30,17 +30,17 @@ const SESSION_COMPONENT_LABEL: Record<string, string> = {
 
 const DELIVERABLE_LABEL: Record<Deliverable, string> = {
   hackathon:
-    "Hackathon agenda (event schedule with modules, challenges, gatekeeper validations, and judging criteria).",
+    "Hackathon agenda (event schedule with modules, challenges, gatekeeper validations, judging criteria, instructor prep notes, and concrete supporting files such as scorecards, facilitator checklists, and judge sheets).",
   lab: "(see 'Lab specification' block below for required contents)",
   challenge:
-    "Goal-oriented participant challenges (what-to-do, not how-to). For EACH challenge produce: a one-line goal, the business rationale, the gatekeeper command(s) a participant must run to prove completion, a **Definition of Done / Acceptance Criteria** section listing every objective signal that marks the challenge as passed (specific resource states, HTTP codes, metric values, GitHub Actions results, security findings closed, etc.), expected time-to-solve, and progressive hints (3 tiers: nudge → targeted → near-solution). Do NOT reveal the full solution path; only the acceptance criteria.",
+    "Goal-oriented participant challenges (what-to-do, not how-to). For EACH challenge produce: a one-line goal, the business rationale, the starting state, exact participant tasks, the gatekeeper command(s) a participant must run to prove completion, a **Definition of Done / Acceptance Criteria** section listing every objective signal that marks the challenge as passed (specific resource states, HTTP codes, metric values, GitHub Actions results, security findings closed, etc.), expected time-to-solve, expected outputs participants should see while progressing, and progressive hints (3 tiers: nudge → targeted → near-solution). Do NOT reveal the full solution path; only the acceptance criteria.",
   session: "(see 'Session specification' block below for required contents)",
   onboarding:
-    "Onboarding / 'Smooth Start' package: prerequisite checklist, automated setup scripts (idempotent), a readiness validator that prints a clear PASS/FAIL per prerequisite.",
+    "Onboarding / 'Smooth Start' package: prerequisite checklist, automated setup scripts (idempotent), readiness validators that print a clear PASS/FAIL per prerequisite, and concrete workspace bootstrap files.",
   gatekeeper:
     "Gatekeeper validators — one script or GitHub Actions workflow per challenge that checks every item in that challenge's Acceptance Criteria and prints a machine-parsable PASS/FAIL plus a human-readable summary.",
   architecture:
-    "Architecture: produce a Mermaid diagram mixing Azure + GitHub products, and justify every component (why this service, what alternatives were rejected, security posture, cost posture, failure modes)."
+    "Architecture: produce a Mermaid diagram mixing Azure + GitHub products, justify every component (why this service, what alternatives were rejected, security posture, cost posture, failure modes), and include the concrete infrastructure/app/config files that implement the proposed design."
 };
 
 export function briefTitle(brief: CustomerBrief): string {
@@ -91,11 +91,18 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
   lines.push(brief.technologies.map((t) => `- ${t}`).join("\n"));
   lines.push("");
 
-  lines.push("## Required deliverables");
+  lines.push("## Packaging objective");
   lines.push(
-    "Produce **all** of the following, each as its own top-level section with a clear stable `## ` heading. Every deliverable must be internally consistent with the others — the same resource names, regions, and identity model throughout."
+    "The output must be **repo-ready**. Think in terms of a customer-shareable workspace first, and a GitHub repository second. Every selected utility/deliverable must map to concrete folders and files, not just prose. The generated package should feel like something an SE can save, open as a workspace, and then publish as a repo with minimal edits."
   );
   lines.push("");
+
+  lines.push("## Required deliverables");
+  lines.push(
+    "Produce **all** of the following, each as its own top-level section with a clear stable `## ` heading. Every deliverable must be internally consistent with the others — the same resource names, regions, and identity model throughout. In addition to the narrative, every major deliverable must include the concrete files needed to realize it in a workspace/repo."
+  );
+  lines.push("");
+  lines.push("- **Workspace Blueprint** — describe the target folder structure, what each folder is for, which files are generated, and how the selected utilities fit together as one workspace/repository.");
   for (const d of brief.deliverables)
     lines.push(`- **${titleFor(d)}** — ${DELIVERABLE_LABEL[d]}`);
   lines.push("");
@@ -110,12 +117,50 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
     lines.push(renderSessionSpec(brief.sessionOptions));
     lines.push("");
   }
+  if (brief.deliverables.includes("challenge")) {
+    lines.push("## Challenge specification (MUST follow when writing the Challenges section)");
+    lines.push(renderChallengeSpec());
+    lines.push("");
+  }
 
   lines.push("## Output instructions");
   lines.push(
     "Be concrete. Use real commands, real resource names prefixed with an abbreviation of the customer name, current API versions, cost/latency trade-offs, and secure defaults (managed identity over keys, least privilege, private networking where feasible). Use Mermaid for diagrams. Keep each script in a single consistent runtime (bash OR powershell OR a GitHub Actions workflow) and make it runnable top-to-bottom. When you reference a previous step's output, capture it into a variable and show how it is reused. Never claim something was 'done' without a gatekeeper check the participant can run. Use stable section names so Forge can split the result into multiple files. For Labs use `### Lab N — Title`; for Challenges use `### Challenge N — Title`; for Hackathon agendas use `### Module N — Title`."
   );
+  lines.push("");
+  lines.push("## File artifact contract");
+  lines.push("The package is expected to materialize into real workspace files. Follow these rules strictly:");
+  lines.push("");
+  lines.push("- Under `## Workspace Blueprint`, include a folder tree for the proposed workspace/repository (for example: `infra/`, `scripts/`, `.github/workflows/`, `labs/`, `challenges/`, `docs/`, `session/`, `onboarding/`).");
+  lines.push("- Whenever you define a concrete file, emit a heading in the exact form `#### File: relative/path.ext` or `##### File: relative/path.ext`.");
+  lines.push("- Immediately under each file heading, include the full file contents in a fenced code block if it is code/config/script, or plain markdown body if it is a markdown/text file.");
+  lines.push("- Do not use placeholders like `path/to/file`. Use realistic repo-relative paths such as `infra/main.bicep`, `scripts/bootstrap/check-prereqs.ps1`, `.github/workflows/gatekeeper-lab-01.yml`, `labs/lab-01/README.md`, `challenges/challenge-01.md`, or `session/demo-script.md`.");
+  lines.push("- For every selected utility/deliverable, produce at least one concrete file artifact. For Labs and Challenges, produce multiple files when appropriate, not one monolithic file.");
+  lines.push("- Prefer separate folders and files over giant catch-all markdown sections. The narrative should explain the package, but the package itself should be file-oriented.");
   return lines.join("\n");
+}
+
+function renderChallengeSpec(): string {
+  return [
+    "For each challenge, produce a deeply defined participant-facing artifact with the following structure in this exact order:",
+    "",
+    "1. **Goal** — one sentence describing the outcome the participant must achieve.",
+    "2. **Business rationale** — why this matters to the customer's scenario.",
+    "3. **Starting state** — what is already provisioned, what files/resources already exist, and what the participant is allowed to change.",
+    "4. **Participant tasks** — a numbered list of exact tasks; not vague goals.",
+    "5. **Expected outputs while progressing** — logs, URLs, CLI output snippets, GitHub checks, portal states, or API responses the participant should expect to see.",
+    "6. **Definition of Done / Acceptance Criteria** — objective, testable pass conditions only.",
+    "7. **Hints** — 3 tiers: nudge → targeted → near-solution.",
+    "8. **Gatekeeper / validator invocation** — the exact validation command or workflow run.",
+    "9. **Debrief notes** — what the instructor should review once the challenge is complete.",
+    "",
+    "**Hard requirements for every challenge:**",
+    "- Challenges must be specific enough that a participant knows exactly what they are changing and what success looks like, without seeing the full solution.",
+    "- Include expected outputs or state transitions at major checkpoints so progress is visible.",
+    "- Call out the exact files, workflows, resources, branches, services, secrets, or policies the participant will touch.",
+    "- If a challenge depends on lab output, name the prerequisite lab and the specific files/resources carried forward.",
+    "- Emit at least one concrete file artifact for each challenge, such as a markdown challenge brief, a validator script, a workflow file, a starter file, or a checklist."
+  ].join("\n");
 }
 
 function renderLabSpec(opts: LabOptions, technologies: string[]): string {

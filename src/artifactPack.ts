@@ -7,6 +7,7 @@ export interface GeneratedArtifact {
 }
 
 const SECTION_PATHS: Array<{ match: RegExp; path: string }> = [
+  { match: /workspace blueprint|repository structure|workspace structure/i, path: "workspace/README.md" },
   { match: /event overview/i, path: "docs/overview.md" },
   { match: /architecture/i, path: "architecture/architecture.md" },
   { match: /onboarding|smooth start|environment setup/i, path: "onboarding/readiness.md" },
@@ -31,6 +32,8 @@ export function buildArtifactPackage(brief: CustomerBrief, markdown: string): Ge
       content: `# Conversation Insights\n\n${brief.conversationInsights.trim()}\n`
     });
   }
+
+  files.push(...extractFileArtifacts(normalized));
 
   for (const section of sections) {
     const sectionPath = mapSectionPath(section.title);
@@ -90,6 +93,41 @@ function splitSubArtifacts(
     ordinal += 1;
   }
   return files;
+}
+
+function extractFileArtifacts(markdown: string): GeneratedArtifact[] {
+  const matches = [...markdown.matchAll(/^#{4,6}\s+File:\s+(.+)$/gm)];
+  if (matches.length === 0) return [];
+
+  const files: GeneratedArtifact[] = [];
+  for (let index = 0; index < matches.length; index++) {
+    const match = matches[index];
+    const rawPath = match[1].trim();
+    const start = (match.index ?? 0) + match[0].length;
+    const end = index + 1 < matches.length ? matches[index + 1].index ?? markdown.length : markdown.length;
+    const block = markdown.slice(start, end).trim();
+    const content = extractFileContent(block);
+    const filePath = normalizeArtifactPath(rawPath);
+    if (!filePath || !content) continue;
+    files.push({ path: filePath, content: ensureTrailingNewline(content) });
+  }
+  return files;
+}
+
+function extractFileContent(block: string): string {
+  const fenced = block.match(/^```[^\n]*\n([\s\S]*?)\n```/m);
+  if (fenced) return fenced[1].trimEnd();
+  return block.trim();
+}
+
+function normalizeArtifactPath(rawPath: string): string | undefined {
+  const normalized = rawPath.replace(/\\/g, "/").replace(/^\.\//, "").trim();
+  if (!normalized || normalized.startsWith("/") || normalized.includes("..")) return undefined;
+  return normalized;
+}
+
+function ensureTrailingNewline(content: string): string {
+  return content.endsWith("\n") ? content : `${content}\n`;
 }
 
 function mapSectionPath(title: string): string {
@@ -158,8 +196,12 @@ function describeArtifact(filePath: string): string {
   const normalized = filePath.replace(/\\/g, "/");
   if (normalized === "README.md") return "Package entry point";
   if (normalized === "ENGAGEMENT.md") return "Full generated master document";
+  if (normalized === "workspace/README.md") return "Workspace/repository blueprint";
   if (normalized.includes("customer-brief")) return "Normalized customer brief and context";
   if (normalized.includes("conversation-insights")) return "Conversation notes and insight context";
+  if (normalized.startsWith("infra/")) return "Infrastructure-as-code or deployment artifact";
+  if (normalized.startsWith("scripts/")) return "Automation or helper script";
+  if (normalized.startsWith(".github/")) return "GitHub automation or policy artifact";
   return `Generated artifact for ${path.dirname(normalized)}`;
 }
 

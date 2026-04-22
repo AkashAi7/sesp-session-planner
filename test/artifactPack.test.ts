@@ -47,6 +47,22 @@ function brief(): CustomerBrief {
 describe("buildArtifactPackage", () => {
   it("creates a repo-like multi-file package", () => {
     const markdown = [
+      "## Workspace Blueprint",
+      "Workspace tree.",
+      "",
+      "#### File: infra/main.bicep",
+      "```bicep",
+      "resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {",
+      "  name: 'ctsoappdev'",
+      "}",
+      "```",
+      "",
+      "#### File: .github/workflows/gatekeeper-lab-01.yml",
+      "```yaml",
+      "name: gatekeeper-lab-01",
+      "on: workflow_dispatch",
+      "```",
+      "",
       "## Event Overview",
       "Summary.",
       "",
@@ -70,8 +86,11 @@ describe("buildArtifactPackage", () => {
 
     expect(paths).toContain("README.md");
     expect(paths).toContain("ENGAGEMENT.md");
+    expect(paths).toContain("workspace/README.md");
     expect(paths).toContain("docs/overview.md");
     expect(paths).toContain("architecture/architecture.md");
+    expect(paths).toContain("infra/main.bicep");
+    expect(paths).toContain(".github/workflows/gatekeeper-lab-01.yml");
     expect(paths).toContain("labs/README.md");
     expect(paths).toContain("labs/01-lab-1-aks-foundation.md");
     expect(paths).toContain("labs/02-lab-2-github-actions-deployment.md");

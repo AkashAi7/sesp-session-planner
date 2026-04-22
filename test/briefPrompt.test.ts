@@ -84,6 +84,15 @@ describe("buildBriefPrompt", () => {
     expect(p).toContain("Stretch goal");
   });
 
+  it("requires repo-ready file artifacts and workspace structure", () => {
+    const p = buildBriefPrompt(baseBrief({ deliverables: ["lab", "challenge", "session", "architecture"] }));
+    expect(p).toContain("## Packaging objective");
+    expect(p).toContain("Workspace Blueprint");
+    expect(p).toContain("## File artifact contract");
+    expect(p).toContain("#### File: relative/path.ext");
+    expect(p).toContain("repo-ready");
+  });
+
   it("includes conversation insight instructions when enabled", () => {
     const p = buildBriefPrompt(baseBrief());
     expect(p).toContain("## Conversation insights");
