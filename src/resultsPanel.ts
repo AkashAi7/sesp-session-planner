@@ -59,7 +59,7 @@ export class SespResultsPanel {
     this.panel.webview.postMessage({ type: "done" });
   }
 
-  /** Called by the extension after an auto-save to surface the path in the toolbar. */
+  /** Called by the extension after an auto-save to surface the saved package location. */
   notifySaved(uri: vscode.Uri) {
     this.savedUri = uri;
     this.panel.webview.postMessage({ type: "saved", path: vscode.workspace.asRelativePath(uri) });
@@ -233,7 +233,7 @@ export class SespResultsPanel {
     else if (m.type === "done") { streaming = false; status.textContent = "Done"; repoBtn.disabled = false; render(); }
     else if (m.type === "saved") {
       banner.classList.add("visible");
-      banner.innerHTML = 'Saved to <code>' + m.path + '</code><a id="revealLink">Reveal in Explorer</a>';
+      banner.innerHTML = 'Saved package to <code>' + m.path + '</code><a id="revealLink">Reveal in Explorer</a>';
       document.getElementById("revealLink").onclick = () => vscode.postMessage({ type: "revealSaved" });
     }
   });

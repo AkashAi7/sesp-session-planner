@@ -17,8 +17,8 @@ export function slugify(s: string): string {
 
 /**
  * Materialize the generated markdown into the current workspace under
- *   ./engagements/<customer-slug>/<timestamp>-<title>.md
- * Returns the saved file URI, or undefined if no workspace is open.
+ *   ./engagements/<customer-slug>/<timestamp>/...
+ * Returns the saved package folder URI, or undefined if no workspace is open.
  */
 export async function autoSaveToWorkspace(
   brief: CustomerBrief,
@@ -41,7 +41,7 @@ export async function autoSaveToWorkspace(
   // Also persist the raw brief for reproducibility
   const briefFile = vscode.Uri.joinPath(folder, `brief.json`);
   await vscode.workspace.fs.writeFile(briefFile, Buffer.from(JSON.stringify(brief, null, 2), "utf8"));
-  return vscode.Uri.joinPath(folder, "README.md");
+  return folder;
 }
 
 /**
