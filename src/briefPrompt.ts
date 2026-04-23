@@ -44,16 +44,20 @@ const DELIVERABLE_LABEL: Record<Deliverable, string> = {
 };
 
 export function briefTitle(brief: CustomerBrief): string {
-  const kinds = brief.deliverables.join(", ");
-  return `${brief.customerName} — ${kinds || "engagement"}`;
+  return `${brief.customerName} — ${brief.engagementMode}`;
 }
 
 /** Validate a brief for contradictions and missing required fields. Returns empty string if valid. */
 export function validateBrief(brief: CustomerBrief): string {
   if (!brief.customerName.trim()) return "Customer name is required.";
   if (!brief.customerContext.trim()) return "Customer context is required.";
-  if (brief.deliverables.length === 0) return "Select at least one deliverable.";
+  if (!brief.definitionOfSuccess.trim()) return "Definition of success is required.";
+  if (brief.deliverables.length === 0) return "At least one generated output is required.";
   if (brief.technologies.length === 0) return "Select at least one technology.";
+  if (!brief.readiness.environment.trim()) return "Environment readiness is required.";
+  if (!brief.readiness.accessAndApprovals.trim()) return "Access and approvals are required.";
+  if (!brief.deliveryRoles.facilitatorProfile.trim()) return "Facilitator guide focus is required.";
+  if (!brief.deliveryRoles.participantProfile.trim()) return "Participant experience is required.";
 
   if (brief.deliverables.includes("lab") && brief.labOptions.components.length === 0)
     return "Select at least one lab section to include.";
@@ -79,16 +83,37 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
   lines.push("");
   lines.push(`**Customer:** ${brief.customerName}`);
   if (brief.industry) lines.push(`**Industry:** ${brief.industry}`);
-  lines.push(`**Preset:** ${brief.engagementPreset}`);
+  lines.push(`**Engagement mode:** ${brief.engagementMode}`);
   lines.push(`**Audience:** ${brief.audience} (${brief.skillLevel})`);
   lines.push(`**Duration:** ${brief.duration}`);
   lines.push(`**Emphasis:** ${brief.emphasis}`);
+  lines.push(`**Definition of success:** ${brief.definitionOfSuccess}`);
   lines.push("");
   lines.push("## Tenant / environment assumption");
   lines.push(tenantInstruction(brief.tenant));
   lines.push("");
   lines.push("## Customer context");
   lines.push(brief.customerContext);
+  lines.push("");
+  lines.push("## Definition of success");
+  lines.push(brief.definitionOfSuccess);
+  lines.push("");
+  lines.push("## Readiness and delivery risk");
+  lines.push(`**Status:** ${brief.readiness.status}`);
+  lines.push("");
+  lines.push(`**Environment readiness:** ${brief.readiness.environment}`);
+  lines.push("");
+  lines.push(`**Access and approvals:** ${brief.readiness.accessAndApprovals}`);
+  lines.push("");
+  lines.push(`**Delivery logistics:** ${brief.readiness.logistics || "None provided."}`);
+  lines.push("");
+  lines.push(`**Known blockers:** ${brief.readiness.blockers || "None provided."}`);
+  lines.push("");
+  lines.push("## Facilitation model");
+  lines.push(`**Facilitator guide focus:** ${brief.deliveryRoles.facilitatorProfile}`);
+  lines.push(`**Support model:** ${brief.deliveryRoles.supportModel}`);
+  lines.push(`**Participant experience:** ${brief.deliveryRoles.participantProfile}`);
+  lines.push(`**Participant grouping:** ${brief.deliveryRoles.participantGrouping}`);
   lines.push("");
   if (brief.conversationInsights.trim()) {
     lines.push("## Conversation insights");
@@ -129,7 +154,7 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
 
   lines.push("## Packaging objective");
   lines.push(
-    "The output must be **repo-ready**. Think in terms of a customer-shareable workspace first, and a GitHub repository second. Every selected utility/deliverable must map to concrete folders and files, not just prose. The generated package should feel like something an SE can save, open as a workspace, and then publish as a repo with minimal edits."
+    "The output must be **repo-ready**. Think in terms of a customer-shareable workspace first, and a GitHub repository second. Every selected utility/deliverable must map to concrete folders and files, not just prose. The generated package should feel like something an SE can save, open as a workspace, publish as a repo, and use to run the engagement with separate participant-facing and facilitator-facing materials."
   );
   lines.push("");
 
@@ -138,6 +163,9 @@ export function buildBriefPrompt(brief: CustomerBrief): string {
     "Produce **all** of the following, each as its own top-level section with a clear stable `## ` heading. Every deliverable must be internally consistent with the others — the same resource names, regions, and identity model throughout. In addition to the narrative, every major deliverable must include the concrete files needed to realize it in a workspace/repo."
   );
   lines.push("");
+  lines.push(`- **Engagement mode contract** — this is a **${brief.engagementMode}**. Shape the tone, timeboxing, participant guidance, facilitator assets, and challenge/lab design accordingly.`);
+  lines.push("- **Definition of success traceability** — every major output must explicitly map back to the success definition above and explain how the facilitator will know the event worked.");
+  lines.push("- **Facilitator / participant separation** — generate distinct artifacts or sections for facilitator guidance versus participant instructions whenever the engagement mode includes live delivery.");
   lines.push("- **Workspace Blueprint** — describe the target folder structure, what each folder is for, which files are generated, and how the selected utilities fit together as one workspace/repository.");
   for (const d of brief.deliverables)
     lines.push(`- **${titleFor(d)}** — ${DELIVERABLE_LABEL[d]}`);

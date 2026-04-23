@@ -6,7 +6,9 @@ function baseBrief(overrides: Partial<CustomerBrief> = {}): CustomerBrief {
   return {
     customerName: "Contoso",
     industry: "Technology / ISV",
+    engagementMode: "workshop",
     customerContext: "They want to modernize their developer platform.",
+    definitionOfSuccess: "Participants complete the platform flow and the facilitators leave with a reusable package.",
     conversationInsights: "Customer is blocked on internal security review and wants proof points from prior workshops.",
     constraints: "",
     complianceTags: [],
@@ -16,10 +18,22 @@ function baseBrief(overrides: Partial<CustomerBrief> = {}): CustomerBrief {
     duration: "4 hours",
     technologies: ["AKS", "GitHub Actions"],
     deliverables: ["lab", "session"],
-    engagementPreset: "workshop",
     useWorkIqInsights: true,
     emphasis: "Balanced (architecture + hands-on)",
     model: "gpt-4.1",
+    readiness: {
+      status: "yellow",
+      environment: "Landing zone and sandbox are partially ready.",
+      accessAndApprovals: "RBAC and org access still need confirmation.",
+      logistics: "Hybrid delivery with breakout support.",
+      blockers: "Security review is still open."
+    },
+    deliveryRoles: {
+      facilitatorProfile: "Facilitator needs speaking notes, timing cues, and troubleshooting guidance.",
+      supportModel: "guided",
+      participantProfile: "Participants should follow a guided build and leave with reusable assets.",
+      participantGrouping: "teams"
+    },
     labOptions: {
       components: [
         "prereqs",
@@ -55,11 +69,10 @@ function baseBrief(overrides: Partial<CustomerBrief> = {}): CustomerBrief {
 }
 
 describe("briefTitle", () => {
-  it("includes customer name and deliverables", () => {
-    const title = briefTitle(baseBrief({ deliverables: ["lab", "architecture"] }));
+  it("includes customer name and engagement mode", () => {
+    const title = briefTitle(baseBrief({ engagementMode: "poc", deliverables: ["lab", "architecture"] }));
     expect(title).toContain("Contoso");
-    expect(title).toContain("lab");
-    expect(title).toContain("architecture");
+    expect(title).toContain("poc");
   });
 });
 
@@ -100,6 +113,14 @@ describe("buildBriefPrompt", () => {
     expect(p).toContain("## Conversation insights");
     expect(p).toContain("WorkIQ");
     expect(p).toContain("internal security review");
+  });
+
+  it("includes success, readiness, and facilitation guidance", () => {
+    const p = buildBriefPrompt(baseBrief());
+    expect(p).toContain("## Definition of success");
+    expect(p).toContain("## Readiness and delivery risk");
+    expect(p).toContain("## Facilitation model");
+    expect(p).toContain("Facilitator / participant separation");
   });
 
   it("does not add tech coverage rule when only one technology selected", () => {

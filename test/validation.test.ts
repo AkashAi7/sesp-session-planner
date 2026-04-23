@@ -10,7 +10,9 @@ function baseBrief(overrides: Partial<CustomerBrief> = {}): CustomerBrief {
   return {
     customerName: "Contoso",
     industry: "Technology / ISV",
+    engagementMode: "workshop",
     customerContext: "Modernize developer platform.",
+    definitionOfSuccess: "Participants complete the build and validate it with the gatekeepers.",
     conversationInsights: "",
     constraints: "",
     complianceTags: [],
@@ -20,10 +22,22 @@ function baseBrief(overrides: Partial<CustomerBrief> = {}): CustomerBrief {
     duration: "4 hours",
     technologies: ["AKS", "GitHub Actions"],
     deliverables: ["lab", "challenge"],
-    engagementPreset: "workshop",
     useWorkIqInsights: false,
     emphasis: "Balanced (architecture + hands-on)",
     model: "gpt-4.1",
+    readiness: {
+      status: "yellow",
+      environment: "Sandbox subscription exists.",
+      accessAndApprovals: "RBAC and org access need confirmation.",
+      logistics: "Hybrid delivery setup.",
+      blockers: "None"
+    },
+    deliveryRoles: {
+      facilitatorProfile: "Lead facilitator needs a runbook and troubleshooting guide.",
+      supportModel: "guided",
+      participantProfile: "Participants work in teams through guided exercises.",
+      participantGrouping: "teams"
+    },
     labOptions: { ...DEFAULT_LAB_OPTIONS },
     sessionOptions: { ...DEFAULT_SESSION_OPTIONS },
     ...overrides
@@ -44,7 +58,7 @@ describe("validateBrief", () => {
   });
 
   it("rejects empty deliverables", () => {
-    expect(validateBrief(baseBrief({ deliverables: [] }))).toContain("deliverable");
+    expect(validateBrief(baseBrief({ deliverables: [] }))).toContain("generated output");
   });
 
   it("rejects empty technologies", () => {
@@ -81,6 +95,21 @@ describe("validateBrief", () => {
       labOptions: { ...DEFAULT_LAB_OPTIONS, components: [] }
     }));
     expect(err).toContain("lab section");
+  });
+
+  it("rejects missing definition of success", () => {
+    const err = validateBrief(baseBrief({ definitionOfSuccess: "   " }));
+    expect(err).toContain("Definition of success");
+  });
+
+  it("rejects missing readiness environment", () => {
+    const err = validateBrief(baseBrief({ readiness: { ...baseBrief().readiness, environment: "" } }));
+    expect(err).toContain("Environment readiness");
+  });
+
+  it("rejects missing facilitator profile", () => {
+    const err = validateBrief(baseBrief({ deliveryRoles: { ...baseBrief().deliveryRoles, facilitatorProfile: "" } }));
+    expect(err).toContain("Facilitator guide focus");
   });
 
   it("rejects session with empty components", () => {

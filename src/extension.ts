@@ -8,7 +8,8 @@ import {
   SespPlannerViewProvider,
   CustomerBrief,
   DEFAULT_LAB_OPTIONS,
-  DEFAULT_SESSION_OPTIONS
+  DEFAULT_SESSION_OPTIONS,
+  deliverablesForMode
 } from "./plannerView";
 import { buildBriefPrompt, briefTitle, validateBrief } from "./briefPrompt";
 import { SespResultsPanel } from "./resultsPanel";
@@ -222,24 +223,24 @@ export function activate(context: vscode.ExtensionContext) {
     );
     if (!tenantPick) return;
 
-    const deliverables = await vscode.window.showQuickPick(
+    const modePick = await vscode.window.showQuickPick(
       [
-        { label: "Labs (end-to-end)", picked: true, value: "lab" },
-        { label: "Challenges (with acceptance criteria)", picked: true, value: "challenge" },
-        { label: "Gatekeepers", picked: true, value: "gatekeeper" },
-        { label: "Hackathon agenda", picked: false, value: "hackathon" },
-        { label: "Session material", picked: false, value: "session" },
-        { label: "Architecture", picked: false, value: "architecture" },
-        { label: "Onboarding", picked: false, value: "onboarding" }
+        { label: "Workshop", description: "Labs + challenges + facilitator assets", value: "workshop" },
+        { label: "Hackathon", description: "Team-based modules + judging + challenge flow", value: "hackathon" },
+        { label: "Briefing", description: "Architecture-first session package", value: "briefing" },
+        { label: "POC Accelerator", description: "Scoped build plan + validation assets", value: "poc" },
+        { label: "Enablement Bootcamp", description: "Training-oriented labs and instructor kit", value: "bootcamp" }
       ],
-      { canPickMany: true, placeHolder: "Select deliverables" }
+      { placeHolder: "Choose engagement mode" }
     );
-    if (!deliverables || deliverables.length === 0) return;
+    if (!modePick) return;
 
     await submitBrief({
       customerName,
       industry: "",
+      engagementMode: modePick.value as CustomerBrief["engagementMode"],
       customerContext,
+      definitionOfSuccess: "Participants complete the core flow, pass the validators, and leave with a reusable customer-ready package.",
       conversationInsights: "",
       constraints: "",
       complianceTags: [],
@@ -247,12 +248,24 @@ export function activate(context: vscode.ExtensionContext) {
       audience: "Developers",
       skillLevel: "Intermediate",
       duration: "4 hours",
-      technologies: [],
-      deliverables: deliverables.map((d) => d.value) as any,
-      engagementPreset: "custom",
+      technologies: ["AKS", "GitHub Actions"],
+      deliverables: deliverablesForMode(modePick.value as CustomerBrief["engagementMode"]),
       useWorkIqInsights: false,
       emphasis: "Balanced (architecture + hands-on)",
       model: vscode.workspace.getConfiguration("sesp").get<string>("model") ?? "gpt-4.1",
+      readiness: {
+        status: "yellow",
+        environment: "Customer or SE sandbox environment exists but should be validated before the session.",
+        accessAndApprovals: "Confirm RBAC, GitHub org permissions, and any Entra app approvals before the engagement.",
+        logistics: "Plan for either local setup or Codespaces and have a fallback demo path.",
+        blockers: "No blockers captured yet."
+      },
+      deliveryRoles: {
+        facilitatorProfile: "The facilitator needs a clear talk track, timing checkpoints, and troubleshooting guidance.",
+        supportModel: "guided",
+        participantProfile: "Participants should follow a guided hands-on path and leave with reusable assets.",
+        participantGrouping: "teams"
+      },
       labOptions: { ...DEFAULT_LAB_OPTIONS },
       sessionOptions: { ...DEFAULT_SESSION_OPTIONS }
     });

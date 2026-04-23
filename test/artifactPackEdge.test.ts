@@ -6,7 +6,9 @@ function brief(overrides: Partial<CustomerBrief> = {}): CustomerBrief {
   return {
     customerName: "Contoso",
     industry: "Technology / ISV",
+    engagementMode: "workshop",
     customerContext: "Need platform workshop.",
+    definitionOfSuccess: "Participants can complete the lab flow end to end.",
     conversationInsights: "",
     constraints: "",
     complianceTags: [],
@@ -16,10 +18,22 @@ function brief(overrides: Partial<CustomerBrief> = {}): CustomerBrief {
     duration: "1 day",
     technologies: ["AKS"],
     deliverables: ["lab"],
-    engagementPreset: "workshop",
     useWorkIqInsights: false,
     emphasis: "Balanced (architecture + hands-on)",
     model: "gpt-4.1",
+    readiness: {
+      status: "green",
+      environment: "Sandbox ready.",
+      accessAndApprovals: "Access approved.",
+      logistics: "Virtual lab.",
+      blockers: ""
+    },
+    deliveryRoles: {
+      facilitatorProfile: "Facilitator runs a compact guided lab.",
+      supportModel: "guided",
+      participantProfile: "Participants work individually through the exercises.",
+      participantGrouping: "individual"
+    },
     labOptions: {
       components: ["prereqs", "provisioning"],
       runtime: "mixed",

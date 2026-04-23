@@ -7,16 +7,20 @@ export class HistoryTreeItem extends vscode.TreeItem {
     this.id = entry.id;
     const when = new Date(entry.createdAt).toLocaleString();
     const deliverables = entry.brief?.deliverables?.join(", ") ?? "";
-    this.description = [deliverables, when].filter(Boolean).join(" • ");
+    const mode = entry.brief?.engagementMode ?? "";
+    const status = entry.status ? `[${entry.status}]` : "";
+    this.description = [mode, status, when].filter(Boolean).join(" • ");
 
     const tip = new vscode.MarkdownString();
     tip.appendMarkdown(`**${entry.title}**\n\n`);
     if (entry.brief) {
       tip.appendMarkdown(`**Customer:** ${entry.brief.customerName}\n\n`);
       if (entry.brief.industry) tip.appendMarkdown(`**Industry:** ${entry.brief.industry}\n\n`);
+      tip.appendMarkdown(`**Mode:** ${entry.brief.engagementMode}\n\n`);
       if (entry.brief.technologies.length)
         tip.appendMarkdown(`**Technologies:** ${entry.brief.technologies.join(", ")}\n\n`);
       if (deliverables) tip.appendMarkdown(`**Deliverables:** ${deliverables}\n\n`);
+      tip.appendMarkdown(`**Definition of success:** ${entry.brief.definitionOfSuccess}\n\n`);
     }
     if (entry.summary) tip.appendMarkdown(`\n${entry.summary}`);
     this.tooltip = tip;
@@ -32,15 +36,13 @@ export class HistoryTreeItem extends vscode.TreeItem {
 }
 
 function iconFor(entry: PlanHistoryEntry): string {
-  const first = entry.brief?.deliverables?.[0];
-  switch (first) {
+  const mode = entry.brief?.engagementMode;
+  switch (mode) {
+    case "workshop": return "mortar-board";
     case "hackathon": return "rocket";
-    case "lab": return "beaker";
-    case "challenge": return "target";
-    case "session": return "book";
-    case "onboarding": return "checklist";
-    case "gatekeeper": return "shield";
-    case "architecture": return "type-hierarchy";
+    case "briefing": return "book";
+    case "poc": return "beaker";
+    case "bootcamp": return "library";
     default: return "sparkle";
   }
 }

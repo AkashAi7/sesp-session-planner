@@ -9,8 +9,10 @@ export type Deliverable =
   | "gatekeeper"
   | "architecture";
 
+export type EngagementMode = "workshop" | "hackathon" | "briefing" | "poc" | "bootcamp";
+
 export interface LabOptions {
-  components: string[]; // subset of LAB_COMPONENT_IDS
+  components: string[];
   runtime: "bash" | "pwsh" | "mixed" | "actions";
   iac: "azd" | "bicep" | "terraform" | "arm" | "none";
   labCount: string;
@@ -22,7 +24,7 @@ export interface LabOptions {
 }
 
 export interface SessionOptions {
-  components: string[]; // subset of SESSION_COMPONENT_IDS
+  components: string[];
   structure: "theory" | "demo" | "hands-on" | "mixed";
   slideCount: string;
   topics: string;
@@ -32,10 +34,27 @@ export interface SessionOptions {
   interactivity: "low" | "medium" | "high";
 }
 
+export interface ReadinessProfile {
+  status: "green" | "yellow" | "red";
+  environment: string;
+  accessAndApprovals: string;
+  logistics: string;
+  blockers: string;
+}
+
+export interface DeliveryRoles {
+  facilitatorProfile: string;
+  supportModel: "light-touch" | "guided" | "high-touch";
+  participantProfile: string;
+  participantGrouping: "individual" | "pairs" | "teams";
+}
+
 export interface CustomerBrief {
   customerName: string;
   industry: string;
+  engagementMode: EngagementMode;
   customerContext: string;
+  definitionOfSuccess: string;
   conversationInsights: string;
   constraints: string;
   complianceTags: string[];
@@ -45,10 +64,11 @@ export interface CustomerBrief {
   duration: string;
   technologies: string[];
   deliverables: Deliverable[];
-  engagementPreset: "custom" | "workshop" | "briefing" | "hackathon" | "poc";
   useWorkIqInsights: boolean;
   emphasis: string;
   model: string;
+  readiness: ReadinessProfile;
+  deliveryRoles: DeliveryRoles;
   labOptions: LabOptions;
   sessionOptions: SessionOptions;
 }
@@ -99,6 +119,18 @@ export const DEFAULT_SESSION_OPTIONS: SessionOptions = {
   interactivity: "medium"
 };
 
+const MODE_DELIVERABLES: Record<EngagementMode, Deliverable[]> = {
+  workshop: ["lab", "challenge", "gatekeeper", "onboarding", "session", "architecture"],
+  hackathon: ["hackathon", "challenge", "gatekeeper", "onboarding", "session", "architecture"],
+  briefing: ["session", "architecture", "onboarding"],
+  poc: ["architecture", "lab", "gatekeeper", "onboarding", "session"],
+  bootcamp: ["lab", "challenge", "gatekeeper", "session", "onboarding", "architecture"]
+};
+
+export function deliverablesForMode(mode: EngagementMode): Deliverable[] {
+  return [...MODE_DELIVERABLES[mode]];
+}
+
 export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = "sesp.plannerView";
   private view?: vscode.WebviewView;
@@ -142,185 +174,213 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 <meta name="viewport" content="width=device-width,initial-scale=1.0" />
 <title>Forge</title>
 <style>
-  :root { --radius: 6px; --gap: 10px; }
+  :root { --radius: 8px; --gap: 12px; }
   body {
-    font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
-    color: var(--vscode-foreground); padding: 14px; margin: 0; background: transparent;
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background: transparent;
+    margin: 0;
+    padding: 14px;
   }
   header { margin-bottom: 14px; }
-  header h1 { font-size: 15px; margin: 0 0 2px 0; font-weight: 600; letter-spacing: 0.01em; }
-  header .sub { color: var(--vscode-descriptionForeground); font-size: 12px; }
-
-  details {
+  header h1 { font-size: 15px; margin: 0 0 4px 0; font-weight: 700; }
+  header .sub { color: var(--vscode-descriptionForeground); font-size: 12px; line-height: 1.4; }
+  .wizard-shell {
     border: 1px solid var(--vscode-panel-border, var(--vscode-input-border, #3c3c3c));
-    border-radius: var(--radius); margin-bottom: 10px;
+    border-radius: var(--radius);
+    overflow: hidden;
     background: var(--vscode-editor-background);
   }
-  details > summary {
-    cursor: pointer; padding: 8px 10px; font-weight: 600; font-size: 12px;
-    list-style: none; display: flex; align-items: center; gap: 8px; user-select: none;
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0;
+    border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
+    background: color-mix(in srgb, var(--vscode-button-background) 6%, transparent);
   }
-  details > summary::-webkit-details-marker { display: none; }
-  details > summary .caret { transition: transform 120ms ease; opacity: 0.7; }
-  details[open] > summary .caret { transform: rotate(90deg); }
-  details > summary .pill {
-    margin-left: auto; font-weight: 500; font-size: 10px;
-    background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
-    padding: 1px 8px; border-radius: 999px;
+  .step-tab {
+    border: 0;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+    padding: 12px 10px;
+    text-align: left;
+    cursor: pointer;
+    border-right: 1px solid var(--vscode-panel-border, #3c3c3c);
   }
-  details > summary .pill.ok {
-    background: var(--vscode-testing-iconPassed, #3fb950); color: #fff;
+  .step-tab:last-child { border-right: none; }
+  .step-tab strong { display: block; font-size: 12px; color: inherit; }
+  .step-tab span { display: block; font-size: 11px; margin-top: 2px; }
+  .step-tab.active {
+    color: var(--vscode-foreground);
+    background: color-mix(in srgb, var(--vscode-button-background) 14%, transparent);
   }
-  .section-body { padding: 4px 12px 12px; }
-
+  .step-tab.done strong::after { content: "  ✓"; color: var(--vscode-testing-iconPassed, #3fb950); }
+  .panel { display: none; padding: 16px; }
+  .panel.active { display: block; }
+  .panel h2 { font-size: 13px; margin: 0 0 4px 0; }
+  .panel .intro { color: var(--vscode-descriptionForeground); font-size: 11px; margin-bottom: 12px; line-height: 1.4; }
   .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: var(--gap); }
-  label { font-weight: 600; font-size: 12px; }
-  .hint { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; }
-  input, textarea, select {
-    width: 100%; box-sizing: border-box;
-    background: var(--vscode-input-background); color: var(--vscode-input-foreground);
-    border: 1px solid var(--vscode-input-border, transparent);
-    border-radius: var(--radius); padding: 6px 8px;
-    font-family: inherit; font-size: inherit;
-  }
-  textarea { resize: vertical; min-height: 60px; }
-  input:focus, textarea:focus, select:focus {
-    outline: 1px solid var(--vscode-focusBorder); border-color: var(--vscode-focusBorder);
-  }
   .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
   .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--gap); }
-
+  label { font-weight: 600; font-size: 12px; }
+  .hint { font-size: 11px; color: var(--vscode-descriptionForeground); }
+  input, textarea, select {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    border: 1px solid var(--vscode-input-border, transparent);
+    border-radius: var(--radius);
+    padding: 7px 9px;
+    font-family: inherit;
+    font-size: inherit;
+  }
+  textarea { resize: vertical; min-height: 72px; }
+  input:focus, textarea:focus, select:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    border-color: var(--vscode-focusBorder);
+  }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .card {
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #555));
+    border-radius: var(--radius);
+    padding: 10px;
+    cursor: pointer;
+    background: var(--vscode-input-background, transparent);
+  }
+  .card.active {
+    border-color: var(--vscode-button-background);
+    background: color-mix(in srgb, var(--vscode-button-background) 14%, transparent);
+  }
+  .card strong { display: block; font-size: 12px; margin-bottom: 3px; }
+  .card small { color: var(--vscode-descriptionForeground); font-size: 11px; line-height: 1.35; }
   .chips { display: flex; flex-wrap: wrap; gap: 6px; }
   .chip {
-    padding: 4px 12px; border-radius: 999px;
+    padding: 4px 12px;
+    border-radius: 999px;
     border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #555));
-    background: var(--vscode-input-background, transparent); color: var(--vscode-foreground);
-    font-size: 11px; cursor: pointer; user-select: none;
-    transition: background 80ms ease, border-color 80ms ease, color 80ms ease;
+    background: var(--vscode-input-background, transparent);
+    color: var(--vscode-foreground);
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
   }
-  .chip:hover { border-color: var(--vscode-focusBorder); }
   .chip.selected {
-    background: var(--vscode-button-background); color: var(--vscode-button-foreground);
-    border-color: var(--vscode-button-background); font-weight: 600;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-button-background);
+    font-weight: 600;
   }
-  .chip.selected::before { content: "✓ "; font-weight: 700; }
-  .chip.selected:hover { background: var(--vscode-button-hoverBackground); border-color: var(--vscode-button-hoverBackground); }
-
-  .radio-group { display: flex; gap: 0; border: 1px solid var(--vscode-input-border, #555); border-radius: 999px; overflow: hidden; width: fit-content; }
+  .chip.selected::before { content: "✓ "; }
+  .group-title {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--vscode-descriptionForeground);
+    margin: 10px 0 4px;
+  }
+  .radio-group {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--vscode-input-border, #555);
+    border-radius: 999px;
+    overflow: hidden;
+    width: fit-content;
+  }
   .radio-group label {
-    padding: 0; font-size: 11px; cursor: pointer; user-select: none;
-    color: var(--vscode-foreground); background: var(--vscode-input-background);
-    border-right: 1px solid var(--vscode-input-border, #555); font-weight: 500;
+    padding: 0;
+    font-size: 11px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--vscode-foreground);
+    background: var(--vscode-input-background);
+    border-right: 1px solid var(--vscode-input-border, #555);
+    font-weight: 500;
   }
   .radio-group label:last-child { border-right: none; }
   .radio-group input[type="radio"] { display: none; }
   .radio-group input[type="radio"]:checked + .rlabel {
-    background: var(--vscode-button-background); color: var(--vscode-button-foreground); font-weight: 700;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-weight: 700;
   }
-  .radio-group .rlabel { padding: 5px 14px; display: inline-block; transition: background 80ms ease; }
-  .radio-group .rlabel:hover { background: var(--vscode-toolbar-hoverBackground, rgba(127,127,127,0.15)); }
-
-  .group-title {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
-    color: var(--vscode-descriptionForeground); margin: 10px 0 4px;
-  }
-
-  .deliverables { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-  .del {
-    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border, #555));
-    border-radius: var(--radius); padding: 9px; cursor: pointer; user-select: none;
-    display: flex; gap: 8px; align-items: flex-start;
-    background: var(--vscode-input-background, transparent);
-    transition: border-color 80ms ease, background 80ms ease;
-  }
-  .del:hover { border-color: var(--vscode-focusBorder); }
-  .del .box {
-    width: 16px; height: 16px; border-radius: 3px;
-    border: 1px solid var(--vscode-checkbox-border, var(--vscode-panel-border, #888));
-    background: var(--vscode-checkbox-background, transparent);
-    flex-shrink: 0; margin-top: 1px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700; color: var(--vscode-checkbox-foreground, inherit);
-  }
-  .del.selected {
-    border-color: var(--vscode-button-background);
-    background: color-mix(in srgb, var(--vscode-button-background) 18%, transparent);
-  }
-  .del.selected .box {
-    background: var(--vscode-button-background); color: var(--vscode-button-foreground);
-    border-color: var(--vscode-button-background);
-  }
-  .del .name { font-weight: 600; font-size: 12px; }
-  .del .desc { font-size: 11px; color: var(--vscode-descriptionForeground); margin-top: 2px; line-height: 1.4; }
-
-  /* Deliverable options sub-panels */
-  .opts {
-    margin-top: 10px; border: 1px dashed var(--vscode-panel-border, #555);
-    border-radius: var(--radius); padding: 10px 12px;
-    background: color-mix(in srgb, var(--vscode-button-background) 6%, transparent);
-  }
-  .opts .opts-title {
-    font-weight: 700; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
-    color: var(--vscode-foreground); margin-bottom: 8px;
-  }
-  .opts .opts-title::before { content: "⚙  "; opacity: 0.7; }
-  .opts[data-hidden="true"] { display: none; }
-
-  .toggle-row { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 6px; }
-  .toggle {
-    display: inline-flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; user-select: none;
-  }
+  .radio-group .rlabel { padding: 5px 14px; display: inline-block; }
+  .toggle-row { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 4px; }
+  .toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer; }
   .toggle input[type="checkbox"] { margin: 0; accent-color: var(--vscode-button-background); }
-
-  .actions {
-    display: flex; gap: 8px; margin-top: 14px;
-    position: sticky; bottom: 0;
+  .outputs {
+    border: 1px dashed var(--vscode-panel-border, #555);
+    border-radius: var(--radius);
+    padding: 10px;
+    background: color-mix(in srgb, var(--vscode-button-background) 6%, transparent);
+    margin-bottom: 12px;
+  }
+  .outputs strong { display: block; font-size: 12px; margin-bottom: 8px; }
+  .summary {
+    border: 1px solid var(--vscode-panel-border, #3c3c3c);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    margin-bottom: 12px;
+    background: color-mix(in srgb, var(--vscode-editor-background) 80%, var(--vscode-button-background) 4%);
+  }
+  .summary h3 { margin: 0 0 8px 0; font-size: 12px; }
+  .summary ul { margin: 0; padding-left: 18px; }
+  .summary li { margin-bottom: 4px; font-size: 12px; }
+  .footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px 16px;
+    border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
     background: var(--vscode-sideBar-background, transparent);
-    padding: 10px 0 4px;
+    position: sticky;
+    bottom: 0;
+  }
+  .footer .grow { flex: 1; }
+  button {
+    border-radius: var(--radius);
+    padding: 9px 12px;
+    cursor: pointer;
+    border: 1px solid var(--vscode-panel-border, #3c3c3c);
+    background: transparent;
+    color: var(--vscode-foreground);
   }
   button.primary {
-    flex: 1; background: var(--vscode-button-background); color: var(--vscode-button-foreground);
-    border: 0; padding: 9px 12px; border-radius: var(--radius);
-    cursor: pointer; font-weight: 600;
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    border-color: var(--vscode-button-background);
+    font-weight: 700;
   }
-  button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
-  button.primary:hover:not(:disabled) { background: var(--vscode-button-hoverBackground); }
-  button.secondary {
-    background: transparent; color: var(--vscode-foreground);
-    border: 1px solid var(--vscode-panel-border, #3c3c3c);
-    padding: 9px 12px; border-radius: var(--radius); cursor: pointer;
-  }
+  button.primary:hover { background: var(--vscode-button-hoverBackground); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
   .error { color: var(--vscode-errorForeground); font-size: 11px; min-height: 14px; }
-  .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-  .preset-btn {
-    border: 1px solid var(--vscode-panel-border, #555);
-    background: var(--vscode-input-background, transparent);
-    color: var(--vscode-foreground);
-    border-radius: var(--radius);
-    padding: 10px; text-align: left; cursor: pointer;
-  }
-  .preset-btn strong { display: block; font-size: 12px; margin-bottom: 2px; }
-  .preset-btn small { color: var(--vscode-descriptionForeground); font-size: 11px; }
-  .preset-btn.active { border-color: var(--vscode-button-background); background: color-mix(in srgb, var(--vscode-button-background) 12%, transparent); }
 </style>
 </head>
 <body>
 <header>
-  <h1>Forge — Customer Engagement Studio</h1>
-  <div class="sub">Brief the customer scenario — Forge generates every selected deliverable and drops it into your workspace.</div>
+  <h1>Forge Planner</h1>
+  <div class="sub">A guided 5-step wizard for CSA / Solution Engineer engagements. Start with the engagement mode and success criteria, then capture readiness, facilitation, and technical scope before Forge generates the package.</div>
 </header>
 
-<details open>
-  <summary><span class="caret">▸</span> Quick presets <span class="pill">optional</span></summary>
-  <div class="section-body">
-    <div class="preset-grid" id="presetGrid"></div>
-    <div class="hint">Presets pre-select deliverables and defaults. You can still change everything afterward.</div>
-  </div>
-</details>
+<div class="wizard-shell">
+  <div class="steps" id="steps"></div>
 
-<details open>
-  <summary><span class="caret">▸</span> 1. Customer <span class="pill" id="pill-customer">required</span></summary>
-  <div class="section-body">
+  <section class="panel active" data-step="1">
+    <h2>1. Engagement Goal</h2>
+    <div class="intro">Pick the engagement mode first, then describe why the customer is doing this and what success must look like when the room is done.</div>
+
+    <div class="field">
+      <label>Engagement mode</label>
+      <div class="cards" id="modeCards"></div>
+    </div>
+
+    <div class="outputs">
+      <strong>Forge will generate</strong>
+      <div class="chips" id="modeOutputs"></div>
+      <div class="hint" id="modeHint" style="margin-top:8px;"></div>
+    </div>
+
     <div class="row2">
       <div class="field">
         <label for="customerName">Customer name</label>
@@ -329,7 +389,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       <div class="field">
         <label for="industry">Industry</label>
         <select id="industry">
-          <option value="">— Select —</option>
+          <option value="">- Select -</option>
           <option>Financial Services</option>
           <option>Healthcare &amp; Life Sciences</option>
           <option>Retail &amp; CPG</option>
@@ -344,53 +404,18 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
         </select>
       </div>
     </div>
+
     <div class="field">
       <label for="customerContext">Customer context</label>
-      <textarea id="customerContext" placeholder="What's their current state, pain points, strategic goals, existing stack, cloud maturity, team size, motivation for this engagement…"></textarea>
+      <textarea id="customerContext" placeholder="Current state, pain points, strategic drivers, platform maturity, stakeholder tensions, and why this engagement matters now."></textarea>
     </div>
+
     <div class="field">
-      <label for="conversationInsights">Conversation notes / insights</label>
-      <textarea id="conversationInsights" placeholder="Paste discovery-call notes, stakeholder concerns, objections, internal meeting notes, or WorkIQ-exported conversation snippets here…"></textarea>
-      <div class="hint">Used to ground the package in real customer conversations.</div>
-    </div>
-  </div>
-</details>
-
-<details open>
-  <summary><span class="caret">▸</span> 2. Constraints &amp; environment <span class="pill">optional</span></summary>
-  <div class="section-body">
-    <div class="field">
-      <label for="constraints">Constraints</label>
-      <textarea id="constraints" placeholder="Budget limits, approved regions, data residency, network policies, allowed SKUs, blocked services, timing…"></textarea>
+      <label for="definitionOfSuccess">Definition of success</label>
+      <textarea id="definitionOfSuccess" placeholder="Required. What must be true by the end of the workshop or hackathon? Example: every team deploys successfully, security signs off on the identity model, the customer chooses a reference architecture."></textarea>
     </div>
 
-    <div class="group-title">Compliance</div>
-    <div class="chips" id="complianceChips"></div>
-
-    <div class="group-title" style="margin-top:14px;">Target environment</div>
-    <div class="radio-group" id="tenantGroup">
-      <label><input type="radio" name="tenant" value="customer" checked><span class="rlabel">Customer tenant</span></label>
-      <label><input type="radio" name="tenant" value="microsoft"><span class="rlabel">Microsoft tenant</span></label>
-      <label><input type="radio" name="tenant" value="personal"><span class="rlabel">Personal sandbox</span></label>
-    </div>
-    <div class="hint" id="tenantHint"></div>
-    <div class="toggle-row" style="margin-top:10px;">
-      <label class="toggle"><input type="checkbox" id="useWorkIqInsights">Use WorkIQ MCP insights if configured</label>
-    </div>
-
-    <div class="row3" style="margin-top:10px;">
-      <div class="field">
-        <label for="duration">Duration</label>
-        <select id="duration">
-          <option>1 hour</option>
-          <option>2 hours</option>
-          <option selected>4 hours</option>
-          <option>Half day</option>
-          <option>1 day</option>
-          <option>2 days</option>
-          <option>1 week</option>
-        </select>
-      </div>
+    <div class="row3">
       <div class="field">
         <label for="audience">Audience role</label>
         <select id="audience">
@@ -410,47 +435,221 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
           <option>Advanced</option>
         </select>
       </div>
+      <div class="field">
+        <label for="duration">Duration</label>
+        <select id="duration">
+          <option>1 hour</option>
+          <option>2 hours</option>
+          <option selected>4 hours</option>
+          <option>Half day</option>
+          <option>1 day</option>
+          <option>2 days</option>
+          <option>1 week</option>
+        </select>
+      </div>
     </div>
-  </div>
-</details>
 
-<details open>
-  <summary><span class="caret">▸</span> 3. Technologies <span class="pill" id="pill-tech">0 selected</span></summary>
-  <div class="section-body">
+    <div class="field">
+      <label>Target environment</label>
+      <div class="radio-group" id="tenantGroup">
+        <label><input type="radio" name="tenant" value="customer" checked><span class="rlabel">Customer tenant</span></label>
+        <label><input type="radio" name="tenant" value="microsoft"><span class="rlabel">Microsoft tenant</span></label>
+        <label><input type="radio" name="tenant" value="personal"><span class="rlabel">Personal sandbox</span></label>
+      </div>
+      <div class="hint" id="tenantHint"></div>
+    </div>
+  </section>
+
+  <section class="panel" data-step="2">
+    <h2>2. Readiness</h2>
+    <div class="intro">Capture what usually makes or breaks the day: environment readiness, approvals, logistics, blockers, compliance, and prior conversation context.</div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="readinessStatus">Readiness status</label>
+        <select id="readinessStatus">
+          <option value="green">Green - ready to execute</option>
+          <option value="yellow" selected>Yellow - workable with tracked gaps</option>
+          <option value="red">Red - major risks or blockers</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="constraints">Global constraints</label>
+        <textarea id="constraints" placeholder="Budget caps, approved regions, restricted SKUs, network policies, data residency, change windows."></textarea>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="environmentReadiness">Environment readiness</label>
+      <textarea id="environmentReadiness" placeholder="What already exists? Landing zone, subscriptions, pre-created resources, repo structure, baseline apps, dev boxes, approved services."></textarea>
+    </div>
+
+    <div class="field">
+      <label for="accessPrereqs">Access and approvals</label>
+      <textarea id="accessPrereqs" placeholder="RBAC, Entra approvals, GitHub org permissions, service principal approvals, allowlists, quota checks, who owns each prerequisite."></textarea>
+    </div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="logisticsNotes">Logistics and delivery setup</label>
+        <textarea id="logisticsNotes" placeholder="In-person or remote? Wi-Fi assumptions, breakout rooms, tenant handoff, machine setup path, fallback demo path, facilitator-to-attendee ratio."></textarea>
+      </div>
+      <div class="field">
+        <label for="knownBlockers">Known blockers and risks</label>
+        <textarea id="knownBlockers" placeholder="Security concerns, approvals still pending, customer skepticism, prior failed POCs, missing quota, time risk, unsupported services."></textarea>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="conversationInsights">Conversation notes / decision history</label>
+      <textarea id="conversationInsights" placeholder="Discovery notes, stakeholder concerns, objections, internal prep notes, decisions already made, what the customer has already seen."></textarea>
+      <div class="toggle-row">
+        <label class="toggle"><input type="checkbox" id="useWorkIqInsights">Use WorkIQ MCP insights and prior materials if configured</label>
+      </div>
+    </div>
+
+    <div class="group-title">Compliance</div>
+    <div class="chips" id="complianceChips"></div>
+  </section>
+
+  <section class="panel" data-step="3">
+    <h2>3. Experience Design</h2>
+    <div class="intro">Separate facilitator needs from participant experience. Forge should generate both the participant path and the instructor operating model.</div>
+
+    <div class="row2">
+      <div class="field">
+        <label for="facilitatorProfile">Facilitator guide focus</label>
+        <textarea id="facilitatorProfile" placeholder="Who is leading? What do facilitators need: speaker notes, answer key, demo fallback, escalation path, timing control, judge rubric, room checkpoints."></textarea>
+      </div>
+      <div class="field">
+        <label for="participantProfile">Participant experience</label>
+        <textarea id="participantProfile" placeholder="What should participants experience? Example: guided build, pair debugging, team-based challenge flow, architecture trade-off discussion, take-home assets."></textarea>
+      </div>
+    </div>
+
+    <div class="row3">
+      <div class="field">
+        <label for="supportModel">Support model</label>
+        <select id="supportModel">
+          <option value="light-touch">Light-touch</option>
+          <option value="guided" selected>Guided</option>
+          <option value="high-touch">High-touch</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="participantGrouping">Participant grouping</label>
+        <select id="participantGrouping">
+          <option value="individual">Individual</option>
+          <option value="pairs">Pairs</option>
+          <option value="teams" selected>Teams</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="emphasis">Emphasis</label>
+        <select id="emphasis">
+          <option selected>Balanced (architecture + hands-on)</option>
+          <option>Hands-on heavy</option>
+          <option>Architecture heavy</option>
+          <option>Security-first (DevSecOps)</option>
+          <option>AI-first (GenAI, RAG, Copilot)</option>
+          <option>Cost-optimized</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="row3">
+      <div class="field">
+        <label for="sessionStructure">Structure</label>
+        <select id="sessionStructure">
+          <option value="theory">Theory-heavy</option>
+          <option value="demo">Demo-heavy</option>
+          <option value="hands-on">Hands-on</option>
+          <option value="mixed" selected>Mixed</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sessionInteractivity">Interactivity</label>
+        <select id="sessionInteractivity">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sessionFormat">Format</label>
+        <select id="sessionFormat">
+          <option value="in-person">In-person</option>
+          <option value="virtual">Virtual</option>
+          <option value="hybrid" selected>Hybrid</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="sessionTopics">Topics / flow to cover</label>
+      <textarea id="sessionTopics" placeholder="Key concepts, live demos, workshop modules, judging moments, architecture reviews, or debrief topics."></textarea>
+    </div>
+
+    <div class="field">
+      <label for="sessionWrapUp">Wrap-up and handoff</label>
+      <textarea id="sessionWrapUp" placeholder="What should attendees leave with? What should the facilitator debrief? What follow-up asks or next-step CTAs should be included?"></textarea>
+    </div>
+  </section>
+
+  <section class="panel" data-step="4">
+    <h2>4. Technical Scope</h2>
+    <div class="intro">Define the technologies and the execution preferences. Forge will adapt the generated assets for the engagement mode you selected earlier.</div>
+
     <div class="group-title">Azure</div>
     <div class="chips" id="azureChips"></div>
     <div class="group-title">GitHub</div>
     <div class="chips" id="githubChips"></div>
     <div class="group-title">AI / Data</div>
     <div class="chips" id="aiChips"></div>
+
     <div class="field" style="margin-top:10px;">
       <label for="customTech">Custom technologies</label>
-      <input id="customTech" placeholder="Type a technology name and press Enter…" />
+      <input id="customTech" placeholder="Type a technology name and press Enter..." />
       <div class="chips" id="customTechChips" style="margin-top:6px;"></div>
-      <div class="hint">Add technologies not in the lists above (e.g. Dapr, Pulumi, Redis).</div>
+      <div class="hint">Add technologies not in the curated lists, such as Dapr, Pulumi, Redis, Backstage, or customer-specific tools.</div>
     </div>
-  </div>
-</details>
 
-<details open>
-  <summary><span class="caret">▸</span> 4. Deliverables <span class="pill" id="pill-del">0 selected</span></summary>
-  <div class="section-body">
-    <div class="deliverables" id="delGrid"></div>
+    <div class="row3">
+      <div class="field">
+        <label for="model">Model</label>
+        <select id="model">
+          <option value="gpt-4.1" selected>gpt-4.1</option>
+          <option value="claude-sonnet-4.5">claude-sonnet-4.5</option>
+          <option value="gpt-5">gpt-5</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sessionSlides">Slide count target</label>
+        <input id="sessionSlides" type="number" min="3" max="120" />
+      </div>
+      <div class="field">
+        <label for="sessionIntro">Intro depth</label>
+        <select id="sessionIntro">
+          <option value="assume-expertise">Assume expertise</option>
+          <option value="light-intro" selected>Light intro</option>
+          <option value="full-intro">Full intro</option>
+        </select>
+      </div>
+    </div>
 
-    <!-- Lab options — visible only when 'lab' deliverable is selected -->
-    <div class="opts" id="labOpts" data-hidden="true">
-      <div class="opts-title">Lab options</div>
-      <div class="group-title" style="margin-top:0;">Sections to include per lab</div>
+    <div class="outputs">
+      <strong>Lab and execution options</strong>
+      <div class="group-title" style="margin-top:0;">Lab components</div>
       <div class="chips" id="labComponents"></div>
       <div class="row3" style="margin-top:10px;">
         <div class="field">
-          <label for="labCount">Number of labs</label>
+          <label for="labCount">Number of labs / modules</label>
           <input id="labCount" type="number" min="1" max="20" />
         </div>
         <div class="field">
-          <label for="labRuntime">Script runtime</label>
+          <label for="labRuntime">Runtime</label>
           <select id="labRuntime">
-            <option value="mixed" selected>Mixed (bash + pwsh where idiomatic)</option>
+            <option value="mixed" selected>Mixed</option>
             <option value="bash">bash only</option>
             <option value="pwsh">PowerShell only</option>
             <option value="actions">GitHub Actions workflows</option>
@@ -463,7 +662,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
             <option value="azd">azd (+ Bicep)</option>
             <option value="terraform">Terraform</option>
             <option value="arm">ARM templates</option>
-            <option value="none">No IaC (az CLI only)</option>
+            <option value="none">No IaC</option>
           </select>
         </div>
       </div>
@@ -471,170 +670,101 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
         <label>Lab depth</label>
         <div class="radio-group">
           <label><input type="radio" name="labDepth" value="standard"><span class="rlabel">Standard</span></label>
-          <label><input type="radio" name="labDepth" value="exhaustive" checked><span class="rlabel">Exhaustive (recommended)</span></label>
+          <label><input type="radio" name="labDepth" value="exhaustive" checked><span class="rlabel">Exhaustive</span></label>
         </div>
       </div>
       <div class="toggle-row">
-        <label class="toggle"><input type="checkbox" id="labTimings" checked>Per-step time estimates</label>
-        <label class="toggle"><input type="checkbox" id="labCost" checked>Cost summary &amp; cleanup</label>
-        <label class="toggle"><input type="checkbox" id="labSec" checked>Security review checklist</label>
-        <label class="toggle"><input type="checkbox" id="labOut" checked>Expected output per command</label>
+        <label class="toggle"><input type="checkbox" id="labTimings" checked>Per-step timings</label>
+        <label class="toggle"><input type="checkbox" id="labCost" checked>Cost and cleanup</label>
+        <label class="toggle"><input type="checkbox" id="labSec" checked>Security review</label>
+        <label class="toggle"><input type="checkbox" id="labOut" checked>Expected outputs</label>
       </div>
-    </div>
 
-    <!-- Session options — visible only when 'session' deliverable is selected -->
-    <div class="opts" id="sessionOpts" data-hidden="true">
-      <div class="opts-title">Session material options</div>
-
-      <div class="group-title" style="margin-top:0;">Components to include</div>
+      <div class="group-title">Session components</div>
       <div class="chips" id="sessionComponents"></div>
-
-      <div class="field" style="margin-top:10px;">
-        <label for="sessionTopics">Topics / outline to cover</label>
-        <textarea id="sessionTopics" placeholder="One bullet per topic — e.g. 'Why GitHub Actions vs Azure Pipelines', 'Live demo: OIDC federation to Azure', 'Q&A on GHAS alert triage'…"></textarea>
-        <div class="hint">Forge will use these as the session's skeleton; leave empty to let Forge propose a full outline.</div>
-      </div>
-
-      <div class="row3">
-        <div class="field">
-          <label for="sessionStructure">Structure</label>
-          <select id="sessionStructure">
-            <option value="theory">Theory-heavy</option>
-            <option value="demo">Demo-heavy</option>
-            <option value="hands-on">Hands-on</option>
-            <option value="mixed" selected>Mixed</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="sessionSlides">Slide count (approx.)</label>
-          <input id="sessionSlides" type="number" min="3" max="120" />
-        </div>
-        <div class="field">
-          <label for="sessionIntro">Intro depth</label>
-          <select id="sessionIntro">
-            <option value="assume-expertise">Assume expertise</option>
-            <option value="light-intro" selected>Light intro</option>
-            <option value="full-intro">Full intro</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row3">
-        <div class="field">
-          <label for="sessionFormat">Format</label>
-          <select id="sessionFormat">
-            <option value="in-person">In-person</option>
-            <option value="virtual">Virtual</option>
-            <option value="hybrid" selected>Hybrid</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="sessionInteractivity">Interactivity</label>
-          <select id="sessionInteractivity">
-            <option value="low">Low (presentation)</option>
-            <option value="medium" selected>Medium (polls, Q&amp;A)</option>
-            <option value="high">High (workshop)</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>&nbsp;</label>
-          <span class="hint">Slide count is a target — Forge will adjust for duration.</span>
-        </div>
-      </div>
-
-      <div class="field">
-        <label for="sessionWrapUp">Wrap-up / takeaways</label>
-        <textarea id="sessionWrapUp" placeholder="What must the attendees be able to do or decide after the session? Follow-up offers, next-step CTAs, homework…"></textarea>
-      </div>
     </div>
+  </section>
 
-    <div class="field" style="margin-top:10px;">
-      <label for="emphasis">Emphasis</label>
-      <select id="emphasis">
-        <option selected>Balanced (architecture + hands-on)</option>
-        <option>Hands-on heavy</option>
-        <option>Architecture heavy</option>
-        <option>Security-first (DevSecOps)</option>
-        <option>AI-first (GenAI, RAG, Copilot)</option>
-        <option>Cost-optimized</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="model">Model</label>
-      <select id="model">
-        <option value="gpt-4.1" selected>gpt-4.1</option>
-        <option value="claude-sonnet-4.5">claude-sonnet-4.5</option>
-        <option value="gpt-5">gpt-5</option>
-      </select>
-    </div>
+  <section class="panel" data-step="5">
+    <h2>5. Review and Generate</h2>
+    <div class="intro">Check the generated brief summary before you run Forge. The summary emphasizes engagement mode, readiness risk, and the facilitator / participant split.</div>
+    <div class="summary" id="reviewSummary"></div>
+  </section>
+
+  <div class="footer">
+    <button id="resetBtn">Reset</button>
+    <div class="grow"></div>
+    <div class="error" id="error"></div>
+    <button id="prevBtn">Back</button>
+    <button id="nextBtn">Next</button>
+    <button class="primary" id="submitBtn">Generate package</button>
   </div>
-</details>
-
-<div class="error" id="error"></div>
-<div class="actions">
-  <button class="primary" id="submit">Generate deliverables</button>
-  <button class="secondary" id="reset">Reset</button>
 </div>
 
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
 
-  const compliance = ["GDPR","HIPAA","PCI-DSS","SOC 2","ISO 27001","FedRAMP","Azure Gov","EU Data Boundary"];
-  const azure = ["AKS","Container Apps","App Service","Functions","ACR","API Management","Key Vault","Entra ID","Azure Monitor","Log Analytics","Azure DevOps","Bicep","Terraform","azd","Front Door","Private Link"];
-  const github = ["GitHub Actions","GHAS","Copilot","Codespaces","Packages","Projects","OIDC federation","Dependabot","Environments & Protection Rules"];
-  const aiData = ["Azure OpenAI","AI Foundry","Cosmos DB","Azure SQL","PostgreSQL Flex","AI Search","Fabric","Synapse","Event Hubs","Service Bus"];
-
-  const deliverables = [
-    { id: "hackathon",    name: "Hackathon",    desc: "Full agenda with modules, challenges, gatekeepers" },
-    { id: "lab",          name: "Labs",         desc: "End-to-end: provisioning → app → gatekeeper → troubleshooting → cleanup" },
-    { id: "challenge",    name: "Challenges",   desc: "Goals + acceptance criteria + progressive hints; no full solution" },
-    { id: "session",      name: "Session material", desc: "Session plan, talk track, slide outline, demo script" },
-    { id: "architecture", name: "Architecture", desc: "Mix-and-match Azure + GitHub design with Mermaid" },
-    { id: "onboarding",   name: "Onboarding",   desc: "Prereqs, setup scripts, readiness validator" },
-    { id: "gatekeeper",   name: "Gatekeepers",  desc: "Validation scripts / GitHub Actions per challenge" }
+  const stepMeta = [
+    { id: 1, title: "Goal", subtitle: "Mode + success" },
+    { id: 2, title: "Readiness", subtitle: "Gaps + blockers" },
+    { id: 3, title: "Experience", subtitle: "Facilitator + participant" },
+    { id: 4, title: "Scope", subtitle: "Tech + options" },
+    { id: 5, title: "Review", subtitle: "Generate" }
   ];
 
+  const compliance = ["GDPR", "HIPAA", "PCI-DSS", "SOC 2", "ISO 27001", "FedRAMP", "Azure Gov", "EU Data Boundary"];
+  const azure = ["AKS", "Container Apps", "App Service", "Functions", "ACR", "API Management", "Key Vault", "Entra ID", "Azure Monitor", "Log Analytics", "Azure DevOps", "Bicep", "Terraform", "azd", "Front Door", "Private Link"];
+  const github = ["GitHub Actions", "GHAS", "Copilot", "Codespaces", "Packages", "Projects", "OIDC federation", "Dependabot", "Environments & Protection Rules"];
+  const aiData = ["Azure OpenAI", "AI Foundry", "Cosmos DB", "Azure SQL", "PostgreSQL Flex", "AI Search", "Fabric", "Synapse", "Event Hubs", "Service Bus"];
   const labComponents = [
-    { id: "prereqs",           label: "Prerequisites" },
-    { id: "role-assignments",  label: "Role assignments" },
-    { id: "provisioning",      label: "Provisioning (IaC)" },
-    { id: "app-deploy",        label: "App deploy" },
-    { id: "config",            label: "Configuration" },
-    { id: "gatekeeper-run",    label: "Gatekeeper run" },
-    { id: "troubleshooting",   label: "Troubleshooting" },
-    { id: "cleanup",           label: "Cleanup" }
+    { id: "prereqs", label: "Prerequisites" },
+    { id: "role-assignments", label: "Role assignments" },
+    { id: "provisioning", label: "Provisioning (IaC)" },
+    { id: "app-deploy", label: "App deploy" },
+    { id: "config", label: "Configuration" },
+    { id: "gatekeeper-run", label: "Gatekeeper run" },
+    { id: "troubleshooting", label: "Troubleshooting" },
+    { id: "cleanup", label: "Cleanup" }
   ];
   const sessionComponents = [
-    { id: "talk-track",         label: "Talk track (with timing)" },
-    { id: "slide-outline",      label: "Slide outline" },
-    { id: "speaker-notes",      label: "Speaker notes" },
-    { id: "demo-script",        label: "Demo script" },
-    { id: "workshop",           label: "Workshop exercises" },
-    { id: "qa-prompts",         label: "Q&A prompts" },
-    { id: "pre-reads",          label: "Pre-reads" },
-    { id: "follow-up",          label: "Post-session follow-up" },
-    { id: "recording-checklist",label: "Recording checklist" }
+    { id: "talk-track", label: "Talk track" },
+    { id: "slide-outline", label: "Slide outline" },
+    { id: "speaker-notes", label: "Speaker notes" },
+    { id: "demo-script", label: "Demo script" },
+    { id: "workshop", label: "Workshop exercises" },
+    { id: "qa-prompts", label: "Q&A prompts" },
+    { id: "pre-reads", label: "Pre-reads" },
+    { id: "follow-up", label: "Follow-up" },
+    { id: "recording-checklist", label: "Recording checklist" }
   ];
-
-  const TENANT_HINTS = {
-    customer: "Generates IaC / commands that assume they will run inside the customer's own tenant and subscription. Scripts will use parameterized subscription / tenant / org placeholders and call out required customer consents.",
-    microsoft: "Assumes you will dry-run this inside a Microsoft internal sandbox subscription where you already have Owner. Prefers short-lived resource groups and cleanup scripts.",
-    personal: "Assumes a personal Azure subscription / GitHub user account. Prefers free tiers and low-cost SKUs; flags anything that needs a paid SKU."
+  const modes = [
+    { id: "workshop", name: "Workshop", desc: "Labs, challenges, facilitator kit, and architecture with practical delivery assets.", hint: "Best when the room must leave able to do the work." },
+    { id: "hackathon", name: "Hackathon", desc: "Team-based modules, judging, challenge flow, gatekeepers, and facilitator operations.", hint: "Best when collaboration, checkpoints, and judging matter." },
+    { id: "briefing", name: "Briefing", desc: "Architecture-first session package, onboarding, and follow-up decision support.", hint: "Best for architecture alignment and executive / architect workshops." },
+    { id: "poc", name: "POC Accelerator", desc: "Reference architecture, scoped labs, validation path, and customer handoff assets.", hint: "Best when the customer needs a near-term implementation path." },
+    { id: "bootcamp", name: "Enablement Bootcamp", desc: "Training-oriented labs, instructor notes, practice exercises, and readiness validators.", hint: "Best for multi-module upskilling." }
+  ];
+  const modeDeliverables = ${JSON.stringify(MODE_DELIVERABLES)};
+  const tenantHints = {
+    customer: "Customer-owned tenant and org. Assume approvals must be explicit and every blocked prerequisite needs a clear owner.",
+    microsoft: "Microsoft sandbox or internal tenant. Prefer fast iteration and short-lived environments.",
+    personal: "Personal sandbox. Keep costs low and call out anything that requires paid SKU or enterprise org features."
   };
 
-  const presets = [
-    { id: "workshop", name: "Hands-on workshop", desc: "Labs + challenges + gatekeepers + onboarding" },
-    { id: "briefing", name: "Customer briefing", desc: "Session + architecture + follow-up package" },
-    { id: "hackathon", name: "Hackathon day", desc: "Agenda + labs + challenges + gatekeepers" },
-    { id: "poc", name: "POC package", desc: "Architecture + labs + onboarding + session handoff" }
+  const fieldIds = [
+    "customerName", "industry", "customerContext", "definitionOfSuccess", "audience", "skillLevel", "duration",
+    "constraints", "environmentReadiness", "accessPrereqs", "logisticsNotes", "knownBlockers", "conversationInsights",
+    "facilitatorProfile", "participantProfile", "sessionTopics", "sessionWrapUp", "emphasis", "model",
+    "readinessStatus", "supportModel", "participantGrouping", "sessionStructure", "sessionInteractivity", "sessionFormat",
+    "sessionSlides", "sessionIntro", "labCount", "labRuntime", "labIac"
   ];
 
   const state = {
-    preset: "custom",
+    step: 1,
+    mode: "workshop",
     compliance: new Set(),
     tech: new Set(),
     customTech: new Set(),
-    deliverables: new Set(["lab","challenge","gatekeeper"]),
     labComponents: new Set(${JSON.stringify([...LAB_COMPONENT_IDS])}),
     sessionComponents: new Set(${JSON.stringify(DEFAULT_SESSION_OPTIONS.components)})
   };
@@ -642,116 +772,75 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   function loadState() {
     try {
       const prev = vscode.getState();
-      if (prev) {
-        for (const k of Object.keys(prev.fields || {})) {
-          const el = document.getElementById(k);
-          if (el) el.value = prev.fields[k];
-        }
-        if (prev.tenant) {
-          const r = document.querySelector('input[name="tenant"][value="' + prev.tenant + '"]');
-          if (r) r.checked = true;
-        }
-        if (prev.labDepth) {
-          const r = document.querySelector('input[name="labDepth"][value="' + prev.labDepth + '"]');
-          if (r) r.checked = true;
-        }
-        if (prev.labToggles) {
-          for (const [id,v] of Object.entries(prev.labToggles)) {
-            const el = document.getElementById(id);
-            if (el) el.checked = !!v;
-          }
-        }
-        if (prev.useWorkIqInsights) {
-          const workIqToggle = document.getElementById("useWorkIqInsights");
-          if (workIqToggle) workIqToggle.checked = !!prev.useWorkIqInsights;
-        }
-        if (prev.preset) state.preset = prev.preset;
-        state.compliance = new Set(prev.compliance || []);
-        state.tech = new Set(prev.tech || []);
-        state.customTech = new Set(prev.customTech || []);
-        state.deliverables = new Set(prev.deliverables || ["lab","challenge","gatekeeper"]);
-        state.labComponents = new Set(prev.labComponents || [...state.labComponents]);
-        state.sessionComponents = new Set(prev.sessionComponents || [...state.sessionComponents]);
+      if (!prev) return;
+      for (const id of fieldIds) {
+        const el = document.getElementById(id);
+        if (el && prev.fields && prev.fields[id] !== undefined) el.value = prev.fields[id];
       }
-    } catch {}
-  }
-
-  function getTenant() {
-    const r = document.querySelector('input[name="tenant"]:checked');
-    return r ? r.value : "customer";
-  }
-  function getLabDepth() {
-    const r = document.querySelector('input[name="labDepth"]:checked');
-    return r ? r.value : "exhaustive";
+      state.step = prev.step || 1;
+      state.mode = prev.mode || "workshop";
+      state.compliance = new Set(prev.compliance || []);
+      state.tech = new Set(prev.tech || []);
+      state.customTech = new Set(prev.customTech || []);
+      state.labComponents = new Set(prev.labComponents || [...state.labComponents]);
+      state.sessionComponents = new Set(prev.sessionComponents || [...state.sessionComponents]);
+      if (prev.tenant) {
+        const radio = document.querySelector('input[name="tenant"][value="' + prev.tenant + '"]');
+        if (radio) radio.checked = true;
+      }
+      if (prev.labDepth) {
+        const radio = document.querySelector('input[name="labDepth"][value="' + prev.labDepth + '"]');
+        if (radio) radio.checked = true;
+      }
+      if (prev.toggles) {
+        for (const [id, value] of Object.entries(prev.toggles)) {
+          const el = document.getElementById(id);
+          if (el) el.checked = !!value;
+        }
+      }
+    } catch {
+      // ignore stale webview state
+    }
   }
 
   function saveState() {
-    const fieldIds = ["customerName","industry","customerContext","conversationInsights","constraints","duration","audience","skillLevel","emphasis","model",
-      "labCount","labRuntime","labIac",
-      "sessionTopics","sessionStructure","sessionSlides","sessionIntro","sessionFormat","sessionInteractivity","sessionWrapUp"];
     const fields = {};
     for (const id of fieldIds) {
       const el = document.getElementById(id);
       if (el) fields[id] = el.value;
     }
-    const labToggles = {};
-    for (const id of ["labTimings","labCost","labSec","labOut"]) {
+    const toggles = {};
+    for (const id of ["useWorkIqInsights", "labTimings", "labCost", "labSec", "labOut"]) {
       const el = document.getElementById(id);
-      if (el) labToggles[id] = el.checked;
+      if (el) toggles[id] = !!el.checked;
     }
     vscode.setState({
+      step: state.step,
+      mode: state.mode,
       fields,
       tenant: getTenant(),
-      preset: state.preset,
-      useWorkIqInsights: document.getElementById("useWorkIqInsights").checked,
       labDepth: getLabDepth(),
-      labToggles,
+      toggles,
       compliance: [...state.compliance],
       tech: [...state.tech],
       customTech: [...state.customTech],
-      deliverables: [...state.deliverables],
       labComponents: [...state.labComponents],
       sessionComponents: [...state.sessionComponents]
     });
   }
 
-  function renderPresets() {
-    const grid = document.getElementById("presetGrid");
-    grid.innerHTML = "";
-    for (const preset of presets) {
-      const el = document.createElement("button");
-      el.type = "button";
-      el.className = "preset-btn" + (state.preset === preset.id ? " active" : "");
-      el.innerHTML = "<strong>" + preset.name + "</strong><small>" + preset.desc + "</small>";
-      el.onclick = () => applyPreset(preset.id);
-      grid.appendChild(el);
-    }
+  function getTenant() {
+    const selected = document.querySelector('input[name="tenant"]:checked');
+    return selected ? selected.value : "customer";
   }
 
-  function applyPreset(presetId) {
-    state.preset = presetId;
-    if (presetId === "workshop") {
-      state.deliverables = new Set(["lab","challenge","gatekeeper","onboarding"]);
-      document.getElementById("emphasis").value = "Hands-on heavy";
-      document.getElementById("sessionStructure").value = "hands-on";
-    } else if (presetId === "briefing") {
-      state.deliverables = new Set(["session","architecture","onboarding"]);
-      document.getElementById("emphasis").value = "Architecture heavy";
-      document.getElementById("sessionStructure").value = "theory";
-    } else if (presetId === "hackathon") {
-      state.deliverables = new Set(["hackathon","lab","challenge","gatekeeper","onboarding"]);
-      document.getElementById("emphasis").value = "Balanced (architecture + hands-on)";
-      document.getElementById("sessionStructure").value = "mixed";
-    } else if (presetId === "poc") {
-      state.deliverables = new Set(["architecture","lab","onboarding","session"]);
-      document.getElementById("emphasis").value = "Balanced (architecture + hands-on)";
-      document.getElementById("sessionStructure").value = "demo";
-    }
-    renderPresets();
-    renderDeliverables();
-    updateDelPill();
-    updateOptsVisibility();
-    saveState();
+  function getLabDepth() {
+    const selected = document.querySelector('input[name="labDepth"]:checked');
+    return selected ? selected.value : "exhaustive";
+  }
+
+  function derivedDeliverables() {
+    return modeDeliverables[state.mode] || [];
   }
 
   function chip(container, value, label, set, onToggle) {
@@ -759,117 +848,170 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     el.className = "chip" + (set.has(value) ? " selected" : "");
     el.textContent = label;
     el.onclick = () => {
-      if (set.has(value)) { set.delete(value); el.classList.remove("selected"); }
-      else { set.add(value); el.classList.add("selected"); }
+      if (set.has(value)) set.delete(value); else set.add(value);
       onToggle();
       saveState();
     };
     container.appendChild(el);
   }
-  function renderChipGroup(containerId, items, set, onToggle, labelAccessor) {
-    const c = document.getElementById(containerId);
-    c.innerHTML = "";
-    for (const t of items) {
-      const value = typeof t === "string" ? t : t.id;
-      const label = typeof t === "string" ? t : (labelAccessor ? labelAccessor(t) : t.label);
-      chip(c, value, label, set, onToggle);
+
+  function renderChipGroup(containerId, items, set, onToggle) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = "";
+    for (const item of items) {
+      const value = typeof item === "string" ? item : item.id;
+      const label = typeof item === "string" ? item : item.label;
+      chip(container, value, label, set, onToggle);
     }
   }
 
-  function updateTechPill() {
-    const p = document.getElementById("pill-tech");
-    const count = state.tech.size + state.customTech.size;
-    p.textContent = count + " selected";
-    p.classList.toggle("ok", count > 0);
-  }
-  function updateDelPill() {
-    const p = document.getElementById("pill-del");
-    p.textContent = state.deliverables.size + " selected";
-    p.classList.toggle("ok", state.deliverables.size > 0);
-  }
-  function updateCustomerPill() {
-    const ok = document.getElementById("customerName").value.trim() && document.getElementById("customerContext").value.trim();
-    const p = document.getElementById("pill-customer");
-    p.textContent = ok ? "ready" : "required";
-    p.classList.toggle("ok", !!ok);
-  }
-  function updateTenantHint() {
-    document.getElementById("tenantHint").textContent = TENANT_HINTS[getTenant()] || "";
-  }
-  function updateOptsVisibility() {
-    document.getElementById("labOpts").dataset.hidden     = state.deliverables.has("lab") ? "false" : "true";
-    document.getElementById("sessionOpts").dataset.hidden = state.deliverables.has("session") ? "false" : "true";
-  }
-
-  function renderDeliverables() {
-    const grid = document.getElementById("delGrid");
-    grid.innerHTML = "";
-    for (const d of deliverables) {
+  function renderModeCards() {
+    const container = document.getElementById("modeCards");
+    container.innerHTML = "";
+    for (const mode of modes) {
       const el = document.createElement("div");
-      const selected = state.deliverables.has(d.id);
-      el.className = "del" + (selected ? " selected" : "");
-      el.innerHTML = '<div class="box">' + (selected ? "✓" : "") + '</div><div><div class="name">' + d.name + '</div><div class="desc">' + d.desc + '</div></div>';
+      el.className = "card" + (state.mode === mode.id ? " active" : "");
+      el.innerHTML = "<strong>" + mode.name + "</strong><small>" + mode.desc + "</small>";
       el.onclick = () => {
-        if (state.deliverables.has(d.id)) state.deliverables.delete(d.id); else state.deliverables.add(d.id);
-        renderDeliverables();
-        updateDelPill();
-        updateOptsVisibility();
+        state.mode = mode.id;
+        syncModeDefaults();
+        renderModeCards();
+        renderModeOutputs();
+        renderReview();
         saveState();
       };
-      grid.appendChild(el);
+      container.appendChild(el);
     }
   }
 
-  function renderAll() {
-    renderPresets();
-    renderChipGroup("complianceChips", compliance, state.compliance, () => saveState());
-    renderChipGroup("azureChips", azure, state.tech, updateTechPill);
-    renderChipGroup("githubChips", github, state.tech, updateTechPill);
-    renderChipGroup("aiChips", aiData, state.tech, updateTechPill);
-    renderChipGroup("labComponents", labComponents, state.labComponents, () => saveState());
-    renderChipGroup("sessionComponents", sessionComponents, state.sessionComponents, () => saveState());
-    renderCustomTechChips();
-    renderDeliverables();
-    updateTechPill(); updateDelPill(); updateCustomerPill();
-    updateTenantHint(); updateOptsVisibility();
+  function syncModeDefaults() {
+    if (state.mode === "briefing") {
+      document.getElementById("sessionStructure").value = "theory";
+      document.getElementById("sessionInteractivity").value = "low";
+      document.getElementById("emphasis").value = "Architecture heavy";
+    } else if (state.mode === "hackathon") {
+      document.getElementById("sessionStructure").value = "hands-on";
+      document.getElementById("sessionInteractivity").value = "high";
+      document.getElementById("emphasis").value = "Hands-on heavy";
+    } else if (state.mode === "poc") {
+      document.getElementById("sessionStructure").value = "demo";
+      document.getElementById("sessionInteractivity").value = "medium";
+      document.getElementById("emphasis").value = "Balanced (architecture + hands-on)";
+    } else if (state.mode === "bootcamp") {
+      document.getElementById("sessionStructure").value = "hands-on";
+      document.getElementById("sessionInteractivity").value = "high";
+      document.getElementById("emphasis").value = "Hands-on heavy";
+    } else {
+      document.getElementById("sessionStructure").value = "mixed";
+      document.getElementById("sessionInteractivity").value = "medium";
+      document.getElementById("emphasis").value = "Balanced (architecture + hands-on)";
+    }
+  }
+
+  function renderModeOutputs() {
+    const container = document.getElementById("modeOutputs");
+    container.innerHTML = "";
+    for (const item of derivedDeliverables()) {
+      const el = document.createElement("span");
+      el.className = "chip selected";
+      el.textContent = item;
+      container.appendChild(el);
+    }
+    const selectedMode = modes.find((mode) => mode.id === state.mode);
+    document.getElementById("modeHint").textContent = selectedMode ? selectedMode.hint : "";
   }
 
   function renderCustomTechChips() {
-    const c = document.getElementById("customTechChips");
-    c.innerHTML = "";
-    for (const t of state.customTech) {
+    const container = document.getElementById("customTechChips");
+    container.innerHTML = "";
+    for (const tech of state.customTech) {
       const el = document.createElement("span");
       el.className = "chip selected";
-      el.textContent = t;
+      el.textContent = tech;
       el.onclick = () => {
-        state.customTech.delete(t);
+        state.customTech.delete(tech);
         renderCustomTechChips();
-        updateTechPill();
+        renderReview();
         saveState();
       };
-      c.appendChild(el);
+      container.appendChild(el);
     }
   }
-  document.getElementById("customTech").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const input = e.target;
-      const val = input.value.trim();
-      if (val && !state.tech.has(val) && !state.customTech.has(val)) {
-        state.customTech.add(val);
-        renderCustomTechChips();
-        updateTechPill();
-        saveState();
-      }
-      input.value = "";
+
+  function renderSteps() {
+    const container = document.getElementById("steps");
+    container.innerHTML = "";
+    for (const meta of stepMeta) {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "step-tab" + (state.step === meta.id ? " active" : "") + (state.step > meta.id ? " done" : "");
+      el.innerHTML = "<strong>" + meta.title + "</strong><span>" + meta.subtitle + "</span>";
+      el.onclick = () => setStep(meta.id);
+      container.appendChild(el);
     }
-  });
+  }
+
+  function setStep(step) {
+    state.step = Math.max(1, Math.min(5, step));
+    for (const panel of document.querySelectorAll(".panel")) {
+      panel.classList.toggle("active", Number(panel.dataset.step) === state.step);
+    }
+    renderSteps();
+    renderReview();
+    document.getElementById("prevBtn").disabled = state.step === 1;
+    document.getElementById("nextBtn").style.display = state.step === 5 ? "none" : "inline-flex";
+    document.getElementById("submitBtn").style.display = state.step === 5 ? "inline-flex" : "none";
+    saveState();
+  }
+
+  function renderReview() {
+    const summary = document.getElementById("reviewSummary");
+    const technologies = [...state.tech, ...state.customTech];
+    summary.innerHTML = [
+      "<h3>Summary</h3>",
+      "<ul>",
+      "<li><strong>Mode:</strong> " + state.mode + "</li>",
+      "<li><strong>Outputs:</strong> " + derivedDeliverables().join(", ") + "</li>",
+      "<li><strong>Success:</strong> " + escapeHtml(document.getElementById("definitionOfSuccess").value || "(required)") + "</li>",
+      "<li><strong>Readiness:</strong> " + escapeHtml(document.getElementById("readinessStatus").value || "yellow") + " - " + escapeHtml(document.getElementById("knownBlockers").value || "no blockers noted") + "</li>",
+      "<li><strong>Facilitator focus:</strong> " + escapeHtml(document.getElementById("facilitatorProfile").value || "(required)") + "</li>",
+      "<li><strong>Participant experience:</strong> " + escapeHtml(document.getElementById("participantProfile").value || "(required)") + "</li>",
+      "<li><strong>Technologies:</strong> " + escapeHtml(technologies.join(", ") || "(required)") + "</li>",
+      "</ul>"
+    ].join("");
+  }
+
+  function renderAll() {
+    renderSteps();
+    renderModeCards();
+    renderModeOutputs();
+    renderChipGroup("complianceChips", compliance, state.compliance, renderReview);
+    renderChipGroup("azureChips", azure, state.tech, renderReview);
+    renderChipGroup("githubChips", github, state.tech, renderReview);
+    renderChipGroup("aiChips", aiData, state.tech, renderReview);
+    renderChipGroup("labComponents", labComponents, state.labComponents, renderReview);
+    renderChipGroup("sessionComponents", sessionComponents, state.sessionComponents, renderReview);
+    renderCustomTechChips();
+    updateTenantHint();
+    renderReview();
+    setStep(state.step);
+  }
+
+  function updateTenantHint() {
+    document.getElementById("tenantHint").textContent = tenantHints[getTenant()] || "";
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
 
   function gather() {
     return {
       customerName: document.getElementById("customerName").value.trim(),
       industry: document.getElementById("industry").value,
+      engagementMode: state.mode,
       customerContext: document.getElementById("customerContext").value.trim(),
+      definitionOfSuccess: document.getElementById("definitionOfSuccess").value.trim(),
       conversationInsights: document.getElementById("conversationInsights").value.trim(),
       constraints: document.getElementById("constraints").value.trim(),
       complianceTags: [...state.compliance],
@@ -878,11 +1020,23 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       skillLevel: document.getElementById("skillLevel").value,
       duration: document.getElementById("duration").value,
       technologies: [...state.tech, ...state.customTech],
-      deliverables: [...state.deliverables],
-      engagementPreset: state.preset,
+      deliverables: derivedDeliverables(),
       useWorkIqInsights: document.getElementById("useWorkIqInsights").checked,
       emphasis: document.getElementById("emphasis").value,
       model: document.getElementById("model").value,
+      readiness: {
+        status: document.getElementById("readinessStatus").value,
+        environment: document.getElementById("environmentReadiness").value.trim(),
+        accessAndApprovals: document.getElementById("accessPrereqs").value.trim(),
+        logistics: document.getElementById("logisticsNotes").value.trim(),
+        blockers: document.getElementById("knownBlockers").value.trim()
+      },
+      deliveryRoles: {
+        facilitatorProfile: document.getElementById("facilitatorProfile").value.trim(),
+        supportModel: document.getElementById("supportModel").value,
+        participantProfile: document.getElementById("participantProfile").value.trim(),
+        participantGrouping: document.getElementById("participantGrouping").value
+      },
       labOptions: {
         components: [...state.labComponents],
         runtime: document.getElementById("labRuntime").value,
@@ -907,87 +1061,119 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     };
   }
 
-  function validate(b) {
-    if (!b.customerName) return "Customer name is required.";
-    if (!b.customerContext) return "Customer context is required.";
-    if (b.deliverables.length === 0) return "Select at least one deliverable.";
-    if (b.technologies.length === 0) return "Select at least one technology.";
-    if (b.deliverables.includes("lab") && b.labOptions.components.length === 0) return "Select at least one lab section to include.";
-    if (b.deliverables.includes("session") && b.sessionOptions.components.length === 0) return "Select at least one session component.";
-    // Contradiction checks
-    const govCompliance = b.complianceTags.some(t => t === "FedRAMP" || t === "Azure Gov");
-    if (govCompliance && b.tenant === "personal") return "FedRAMP / Azure Gov is incompatible with personal sandbox. Use customer or Microsoft tenant.";
-    if (b.deliverables.includes("gatekeeper") && !b.deliverables.includes("challenge") && !b.deliverables.includes("lab")) return "Gatekeepers need at least one challenge or lab to validate.";
+  function validate(brief) {
+    if (!brief.customerName) return "Customer name is required.";
+    if (!brief.customerContext) return "Customer context is required.";
+    if (!brief.definitionOfSuccess) return "Definition of success is required.";
+    if (brief.technologies.length === 0) return "Select at least one technology.";
+    if (!brief.readiness.environment) return "Environment readiness is required.";
+    if (!brief.readiness.accessAndApprovals) return "Access and approvals are required.";
+    if (!brief.deliveryRoles.facilitatorProfile) return "Facilitator guide focus is required.";
+    if (!brief.deliveryRoles.participantProfile) return "Participant experience is required.";
+    if (brief.deliverables.includes("lab") && brief.labOptions.components.length === 0) return "Select at least one lab section.";
+    if (brief.deliverables.includes("session") && brief.sessionOptions.components.length === 0) return "Select at least one session component.";
+    const govCompliance = brief.complianceTags.some((t) => t === "FedRAMP" || t === "Azure Gov");
+    if (govCompliance && brief.tenant === "personal") return "FedRAMP / Azure Gov is incompatible with personal sandbox.";
     return "";
   }
 
-  // Default values
-  document.getElementById("labCount").value = "3";
-  document.getElementById("sessionSlides").value = "20";
-
-  document.getElementById("submit").onclick = () => {
-    const brief = gather();
-    const err = validate(brief);
-    const errEl = document.getElementById("error");
-    errEl.textContent = err;
-    if (err) return;
-    vscode.postMessage({ type: "submit", brief });
-  };
-  document.getElementById("reset").onclick = () => {
+  function reset() {
     vscode.setState(undefined);
-    for (const id of ["customerName","industry","customerContext","conversationInsights","constraints","sessionTopics","sessionWrapUp"]) document.getElementById(id).value = "";
-    document.querySelector('input[name="tenant"][value="customer"]').checked = true;
-    document.querySelector('input[name="labDepth"][value="exhaustive"]').checked = true;
-    document.getElementById("useWorkIqInsights").checked = false;
-    document.getElementById("duration").selectedIndex = 2;
-    document.getElementById("audience").selectedIndex = 0;
-    document.getElementById("skillLevel").selectedIndex = 1;
-    document.getElementById("emphasis").selectedIndex = 0;
-    document.getElementById("model").selectedIndex = 0;
+    for (const id of fieldIds) {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    }
+    document.getElementById("duration").value = "4 hours";
+    document.getElementById("audience").value = "Developers";
+    document.getElementById("skillLevel").value = "Intermediate";
+    document.getElementById("readinessStatus").value = "yellow";
+    document.getElementById("supportModel").value = "guided";
+    document.getElementById("participantGrouping").value = "teams";
+    document.getElementById("sessionStructure").value = "mixed";
+    document.getElementById("sessionInteractivity").value = "medium";
+    document.getElementById("sessionFormat").value = "hybrid";
+    document.getElementById("sessionIntro").value = "light-intro";
+    document.getElementById("sessionSlides").value = "20";
     document.getElementById("labCount").value = "3";
     document.getElementById("labRuntime").value = "mixed";
     document.getElementById("labIac").value = "bicep";
-    for (const id of ["labTimings","labCost","labSec","labOut"]) document.getElementById(id).checked = true;
-    document.getElementById("sessionStructure").value = "mixed";
-    document.getElementById("sessionSlides").value = "20";
-    document.getElementById("sessionIntro").value = "light-intro";
-    document.getElementById("sessionFormat").value = "hybrid";
-    document.getElementById("sessionInteractivity").value = "medium";
-    state.preset = "custom";
+    document.getElementById("emphasis").value = "Balanced (architecture + hands-on)";
+    document.getElementById("model").value = "gpt-4.1";
+    document.getElementById("useWorkIqInsights").checked = false;
+    document.getElementById("labTimings").checked = true;
+    document.getElementById("labCost").checked = true;
+    document.getElementById("labSec").checked = true;
+    document.getElementById("labOut").checked = true;
+    document.querySelector('input[name="tenant"][value="customer"]').checked = true;
+    document.querySelector('input[name="labDepth"][value="exhaustive"]').checked = true;
+    state.step = 1;
+    state.mode = "workshop";
     state.compliance.clear();
     state.tech.clear();
     state.customTech.clear();
-    state.deliverables = new Set(["lab","challenge","gatekeeper"]);
     state.labComponents = new Set(${JSON.stringify([...LAB_COMPONENT_IDS])});
     state.sessionComponents = new Set(${JSON.stringify(DEFAULT_SESSION_OPTIONS.components)});
     document.getElementById("error").textContent = "";
+    syncModeDefaults();
     renderAll();
+    saveState();
+  }
+
+  document.getElementById("customTech").addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const value = event.target.value.trim();
+    if (value && !state.tech.has(value) && !state.customTech.has(value)) {
+      state.customTech.add(value);
+      renderCustomTechChips();
+      renderReview();
+      saveState();
+    }
+    event.target.value = "";
+  });
+
+  for (const id of fieldIds) {
+    const el = document.getElementById(id);
+    if (!el) continue;
+    el.addEventListener("change", () => {
+      renderReview();
+      saveState();
+    });
+    if (el.tagName === "TEXTAREA" || el.type === "text" || el.type === "number") {
+      el.addEventListener("input", () => {
+        renderReview();
+        saveState();
+      });
+    }
+  }
+  document.querySelectorAll('input[name="tenant"]').forEach((el) => el.addEventListener("change", () => {
+    updateTenantHint();
+    renderReview();
+    saveState();
+  }));
+  document.querySelectorAll('input[name="labDepth"]').forEach((el) => el.addEventListener("change", saveState));
+  ["useWorkIqInsights", "labTimings", "labCost", "labSec", "labOut"].forEach((id) => {
+    document.getElementById(id).addEventListener("change", () => {
+      renderReview();
+      saveState();
+    });
+  });
+
+  document.getElementById("prevBtn").onclick = () => setStep(state.step - 1);
+  document.getElementById("nextBtn").onclick = () => setStep(state.step + 1);
+  document.getElementById("resetBtn").onclick = reset;
+  document.getElementById("submitBtn").onclick = () => {
+    const brief = gather();
+    const err = validate(brief);
+    document.getElementById("error").textContent = err;
+    if (err) return;
+    vscode.postMessage({ type: "submit", brief });
   };
 
-  ["customerName","customerContext","conversationInsights"].forEach((id) => {
-    document.getElementById(id).addEventListener("input", () => { updateCustomerPill(); saveState(); });
-  });
-  [
-    "industry","constraints","duration","audience","skillLevel","emphasis","model",
-    "labCount","labRuntime","labIac",
-    "sessionTopics","sessionStructure","sessionSlides","sessionIntro","sessionFormat","sessionInteractivity","sessionWrapUp"
-  ].forEach((id) => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener("change", saveState);
-    if (el && (el.tagName === "TEXTAREA" || el.type === "number" || el.type === "text")) el.addEventListener("input", saveState);
-  });
-  document.querySelectorAll('input[name="tenant"]').forEach((r) => {
-    r.addEventListener("change", () => { updateTenantHint(); saveState(); });
-  });
-  document.querySelectorAll('input[name="labDepth"]').forEach((r) => {
-    r.addEventListener("change", saveState);
-  });
-  for (const id of ["labTimings","labCost","labSec","labOut"]) {
-    document.getElementById(id).addEventListener("change", saveState);
-  }
-  document.getElementById("useWorkIqInsights").addEventListener("change", saveState);
-
   loadState();
+  if (!document.getElementById("sessionSlides").value) document.getElementById("sessionSlides").value = "20";
+  if (!document.getElementById("labCount").value) document.getElementById("labCount").value = "3";
+  syncModeDefaults();
   renderAll();
 </script>
 </body>

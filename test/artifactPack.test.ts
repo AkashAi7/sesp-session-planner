@@ -6,7 +6,9 @@ function brief(): CustomerBrief {
   return {
     customerName: "Contoso",
     industry: "Technology / ISV",
+    engagementMode: "workshop",
     customerContext: "Need an internal platform workshop.",
+    definitionOfSuccess: "Teams complete the platform labs and agree on a reference architecture.",
     conversationInsights: "Security and platform teams disagree on hosting choice.",
     constraints: "Must fit in existing Azure landing zone.",
     complianceTags: ["SOC 2"],
@@ -16,10 +18,22 @@ function brief(): CustomerBrief {
     duration: "1 day",
     technologies: ["AKS", "GitHub Actions"],
     deliverables: ["lab", "challenge", "architecture"],
-    engagementPreset: "workshop",
     useWorkIqInsights: true,
     emphasis: "Balanced (architecture + hands-on)",
     model: "gpt-4.1",
+    readiness: {
+      status: "yellow",
+      environment: "Landing zone exists with limited quotas.",
+      accessAndApprovals: "RBAC needs pre-approval.",
+      logistics: "Onsite with breakout tables.",
+      blockers: "Hosting decision still open."
+    },
+    deliveryRoles: {
+      facilitatorProfile: "Facilitators need timing, answer keys, and escalation guidance.",
+      supportModel: "guided",
+      participantProfile: "Participants build in teams and compare trade-offs.",
+      participantGrouping: "teams"
+    },
     labOptions: {
       components: ["prereqs", "provisioning", "app-deploy"],
       runtime: "mixed",
@@ -96,5 +110,10 @@ describe("buildArtifactPackage", () => {
     expect(paths).toContain("labs/02-lab-2-github-actions-deployment.md");
     expect(paths).toContain("challenges/01-challenge-1-secure-the-pipeline.md");
     expect(paths).toContain("insights/conversation-insights.md");
+
+    const engagementDoc = artifacts.find((artifact) => artifact.path === "docs/customer-brief.md");
+    expect(engagementDoc?.content).toContain("Engagement mode");
+    expect(engagementDoc?.content).toContain("Definition of success");
+    expect(engagementDoc?.content).toContain("Delivery roles");
   });
 });
