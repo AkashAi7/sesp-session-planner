@@ -137,7 +137,8 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly extensionUri: vscode.Uri,
-    private readonly onSubmit: (brief: CustomerBrief) => void | Promise<void>
+    private readonly onSubmit: (brief: CustomerBrief) => void | Promise<void>,
+    private readonly workIqEnabled: boolean = false
   ) {}
 
   resolveWebviewView(webviewView: vscode.WebviewView): void {
@@ -146,7 +147,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       enableScripts: true,
       localResourceRoots: [this.extensionUri]
     };
-    webviewView.webview.html = this.renderHtml(webviewView.webview);
+    webviewView.webview.html = this.renderHtml(webviewView.webview, this.workIqEnabled);
     webviewView.webview.onDidReceiveMessage(async (msg) => {
       if (msg?.type === "submit") await this.onSubmit(msg.brief as CustomerBrief);
     });
@@ -156,7 +157,11 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     this.view?.show?.(true);
   }
 
-  private renderHtml(webview: vscode.Webview): string {
+  setGenerating(generating: boolean): void {
+    this.view?.webview.postMessage({ type: "setGenerating", generating });
+  }
+
+  private renderHtml(webview: vscode.Webview, workIqEnabled: boolean): string {
     const nonce = getNonce();
     const csp = [
       "default-src 'none'",
@@ -355,6 +360,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
   button.primary:hover { background: var(--vscode-button-hoverBackground); }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
   .error { color: var(--vscode-errorForeground); font-size: 11px; min-height: 14px; }
+  .req { color: var(--vscode-errorForeground); margin-left: 2px; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -383,7 +389,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 
     <div class="row2">
       <div class="field">
-        <label for="customerName">Customer name</label>
+        <label for="customerName">Customer name<span class="req">*</span></label>
         <input id="customerName" placeholder="Contoso Ltd." />
       </div>
       <div class="field">
@@ -406,12 +412,12 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     </div>
 
     <div class="field">
-      <label for="customerContext">Customer context</label>
+      <label for="customerContext">Customer context<span class="req">*</span></label>
       <textarea id="customerContext" placeholder="Current state, pain points, strategic drivers, platform maturity, stakeholder tensions, and why this engagement matters now."></textarea>
     </div>
 
     <div class="field">
-      <label for="definitionOfSuccess">Definition of success</label>
+      <label for="definitionOfSuccess">Definition of success<span class="req">*</span></label>
       <textarea id="definitionOfSuccess" placeholder="Required. What must be true by the end of the workshop or hackathon? Example: every team deploys successfully, security signs off on the identity model, the customer chooses a reference architecture."></textarea>
     </div>
 
@@ -480,12 +486,12 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     </div>
 
     <div class="field">
-      <label for="environmentReadiness">Environment readiness</label>
+      <label for="environmentReadiness">Environment readiness<span class="req">*</span></label>
       <textarea id="environmentReadiness" placeholder="What already exists? Landing zone, subscriptions, pre-created resources, repo structure, baseline apps, dev boxes, approved services."></textarea>
     </div>
 
     <div class="field">
-      <label for="accessPrereqs">Access and approvals</label>
+      <label for="accessPrereqs">Access and approvals<span class="req">*</span></label>
       <textarea id="accessPrereqs" placeholder="RBAC, Entra approvals, GitHub org permissions, service principal approvals, allowlists, quota checks, who owns each prerequisite."></textarea>
     </div>
 
@@ -504,7 +510,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
       <label for="conversationInsights">Conversation notes / decision history</label>
       <textarea id="conversationInsights" placeholder="Discovery notes, stakeholder concerns, objections, internal prep notes, decisions already made, what the customer has already seen."></textarea>
       <div class="toggle-row">
-        <label class="toggle"><input type="checkbox" id="useWorkIqInsights">Use WorkIQ MCP insights and prior materials if configured</label>
+${workIqEnabled ? '        <label class="toggle"><input type="checkbox" id="useWorkIqInsights">Use WorkIQ MCP insights and prior materials if configured</label>' : '        <input type="hidden" id="useWorkIqInsights" value="false" />'}
       </div>
     </div>
 
@@ -518,11 +524,11 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 
     <div class="row2">
       <div class="field">
-        <label for="facilitatorProfile">Facilitator guide focus</label>
+        <label for="facilitatorProfile">Facilitator guide focus<span class="req">*</span></label>
         <textarea id="facilitatorProfile" placeholder="Who is leading? What do facilitators need: speaker notes, answer key, demo fallback, escalation path, timing control, judge rubric, room checkpoints."></textarea>
       </div>
       <div class="field">
-        <label for="participantProfile">Participant experience</label>
+        <label for="participantProfile">Participant experience<span class="req">*</span></label>
         <textarea id="participantProfile" placeholder="What should participants experience? Example: guided build, pair debugging, team-based challenge flow, architecture trade-off discussion, take-home assets."></textarea>
       </div>
     </div>
@@ -1167,8 +1173,19 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     const err = validate(brief);
     document.getElementById("error").textContent = err;
     if (err) return;
+    setGeneratingUI(true);
     vscode.postMessage({ type: "submit", brief });
   };
+
+  function setGeneratingUI(generating) {
+    const btn = document.getElementById("submitBtn");
+    btn.disabled = generating;
+    btn.textContent = generating ? "Generating…" : "Generate package";
+  }
+
+  window.addEventListener("message", (e) => {
+    if (e.data?.type === "setGenerating") setGeneratingUI(e.data.generating);
+  });
 
   loadState();
   if (!document.getElementById("sessionSlides").value) document.getElementById("sessionSlides").value = "20";

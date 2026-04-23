@@ -83,9 +83,13 @@ export function activate(context: vscode.ExtensionContext) {
       }
     } catch (err: any) {
       output.appendLine(`[forge] generate error: ${err?.stack ?? err}`);
-      panel.appendMarkdown(
-        `\n\n> **Copilot SDK unavailable** (\`${err?.message ?? err}\`). Falling back to VS Code LM…\n\n`
-      );
+      panel.setStatus("SDK unavailable — switching to VS Code LM…");
+      void vscode.window.showWarningMessage(
+        `Forge: Copilot SDK unavailable (${err?.message ?? err}). Falling back to VS Code Language Model.`,
+        "Open Settings"
+      ).then(pick => {
+        if (pick === "Open Settings") vscode.commands.executeCommand("workbench.action.openSettings", "sesp");
+      });
       try {
         await runWithVsCodeLmTo(
           SESP_SYSTEM_PROMPT,
@@ -94,7 +98,8 @@ export function activate(context: vscode.ExtensionContext) {
           tokenSource.token
         );
       } catch (err2: any) {
-        panel.appendMarkdown(`\n\n**Fallback failed:** ${err2?.message ?? err2}`);
+        panel.setStatus("Generation failed");
+        void vscode.window.showErrorMessage(`Forge: Fallback LM also failed — ${err2?.message ?? err2}`);
       }
     }
 
@@ -105,7 +110,15 @@ export function activate(context: vscode.ExtensionContext) {
       try {
         const uri = await autoSaveToWorkspace(brief, panel.markdown);
         if (uri) panel.notifySaved(uri);
-        else panel.setStatus("Done (open a workspace folder to auto-save)");
+        else {
+          panel.setStatus("Done");
+          void vscode.window.showInformationMessage(
+            "Forge: Open a workspace folder to enable auto-save of generated packages.",
+            "Open Folder"
+          ).then(pick => {
+            if (pick === "Open Folder") vscode.commands.executeCommand("vscode.openFolder");
+          });
+        }
       } catch (err: any) {
         output.appendLine(`[forge] auto-save failed: ${err?.message ?? err}`);
       }
@@ -126,9 +139,16 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (!raw && !cmd) {
       stream.markdown(
-        "Open the **Forge Planner** from the activity bar for the full customer-brief experience, or use a slash command.\n"
+        "**Forge** helps you build complete customer engagement packages.\n\n" +
+        "**Quick option \u2014 slash commands** (instant, no form required):\n" +
+        "- `/hackathon <scenario>` \u2014 Full hackathon plan with modules, challenges, and gatekeepers\n" +
+        "- `/lab <topic>` \u2014 End-to-end lab with CLI commands and IaC\n" +
+        "- `/challenge <topic>` \u2014 Goal-oriented challenge with acceptance criteria\n" +
+        "- `/gatekeeper <challenge>` \u2014 Validation script / GitHub Action\n" +
+        "- `/architecture <stack>` \u2014 Mermaid diagram + component justification\n\n" +
+        "**Full option \u2014 Forge Planner** (structured multi-deliverable package, readiness tracking, auto-save):\n"
       );
-      stream.button({ command: "sesp.openPlanner", title: "Open Forge" });
+      stream.button({ command: "sesp.openPlanner", title: "Open Forge Planner" });
       return;
     }
 
@@ -144,17 +164,17 @@ export function activate(context: vscode.ExtensionContext) {
       }
     } catch (err: any) {
       output.appendLine(`[forge] SDK error: ${err?.stack ?? err}`);
-      stream.markdown(
-        `> **Copilot SDK unavailable** (\`${err?.message ?? err}\`). Falling back to VS Code LM…\n\n`
-      );
+      stream.progress("Copilot SDK unavailable — switching to VS Code LM…");
       try {
         await runWithVsCodeLm(SESP_SYSTEM_PROMPT, userPrompt, stream, token, request.model);
       } catch (err2: any) {
-        stream.markdown(`\n\n**Fallback failed:** ${err2?.message ?? err2}`);
+        stream.markdown(`**Generation failed:** ${err2?.message ?? err2}`);
       }
     }
 
-    stream.button({ command: "sesp.openPlanner", title: "Open Forge Planner" });
+    if (!cmd) {
+      stream.button({ command: "sesp.openPlanner", title: "Open Forge Planner" });
+    }
   };
 
   const participant = vscode.chat.createChatParticipant("sesp.planner", handler);
@@ -178,19 +198,32 @@ export function activate(context: vscode.ExtensionContext) {
       summary: brief.customerContext.slice(0, 240),
       status: "pending"
     };
+    if (store.all().length >= 45) {
+      void vscode.window.showWarningMessage(
+        `Forge: History is near its 50-entry limit (${store.all().length} entries saved). Oldest entries will be dropped automatically.`
+      );
+    }
     await store.add(entry);
     historyProvider.refresh();
+    setGenerating(true);
     try {
       await generateToPanel(title, prompt, brief, entry.id);
       await store.update(entry.id, { status: "complete" });
     } catch (err: any) {
       await store.update(entry.id, { status: "failed" });
       output.appendLine(`[forge] generation failed for ${entry.id}: ${err?.message ?? err}`);
+    } finally {
+      setGenerating(false);
     }
     historyProvider.refresh();
   };
 
-  const plannerProvider = new SespPlannerViewProvider(context.extensionUri, submitBrief);
+  // Mutable reference set after plannerProvider is constructed
+  let setGenerating: (v: boolean) => void = () => {};
+
+  const workIqEnabled = vscode.workspace.getConfiguration("sesp").get<boolean>("enableWorkIqMcp", false);
+  const plannerProvider = new SespPlannerViewProvider(context.extensionUri, submitBrief, workIqEnabled);
+  setGenerating = (v) => plannerProvider.setGenerating(v);
 
   // ---------- History tree ----------
   const historyTree = vscode.window.createTreeView("sesp.historyView", {

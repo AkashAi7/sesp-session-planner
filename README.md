@@ -4,7 +4,7 @@ A GitHub Copilot-powered VS Code extension that helps Microsoft/GitHub Solution
 Engineers rapidly plan hackathons, labs, sessions, and technical challenges
 across the **Azure** and **GitHub** product suites.
 
-It registers a Chat participant **`@sesp`** that mixes and matches Azure + GitHub
+It registers a Chat participant **`@forge`** that mixes and matches Azure + GitHub
 technologies, produces end-to-end event plans, step-by-step infra labs,
 goal-oriented challenges, onboarding scripts, and gatekeeper validators.
 
@@ -45,14 +45,20 @@ npm install
 npm run compile
 ```
 
-Press `F5` in VS Code to launch the Extension Development Host, then in the
-Chat view type:
+Press `F5` in VS Code to launch the Extension Development Host.
+
+**Option A — Full structured wizard** (recommended for multi-deliverable packages):
+Click the **Forge** icon in the activity bar → fill the 5-step brief → click **Generate package**.
+
+**Option B — Quick slash command** (ad-hoc generation in Chat):
 
 ```
-@sesp /hackathon Design a 4-hour hackathon for migrating a monolith to AKS with GitHub Actions and GHAS.
+@forge /hackathon Design a 4-hour hackathon for migrating a monolith to AKS with GitHub Actions and GHAS.
 ```
 
 ## Configuration
+
+> **Finding settings:** Open VS Code Settings (`Ctrl+,`) and search **Forge** — all settings appear under the Forge section. Or use the command palette: `Forge: Open Settings`.
 
 | Setting | Default | Description |
 | --- | --- | --- |
@@ -61,11 +67,13 @@ Chat view type:
 | `sesp.cliPath` | `""` | Optional path to the Copilot CLI executable. |
 | `sesp.cliUrl` | `""` | Connect to an already-running `copilot --server` instance (e.g., `localhost:4321`). |
 | `sesp.enableGithubMcp` | `true` | Attach GitHub's hosted MCP server to the session. |
+| `sesp.enableWorkIqMcp` | `false` | Attach WorkIQ MCP for customer conversation insights (shows checkbox in Planner when enabled). |
+| `sesp.autoSaveToWorkspace` | `true` | Auto-save generated packages under `./engagements/<customer>/` in the workspace. |
 
 ## Architecture
 
 ```
-VS Code Chat (@sesp)
+VS Code Chat (@forge)
       │
       ▼
 ChatRequestHandler (src/extension.ts)
@@ -80,10 +88,10 @@ ChatRequestHandler (src/extension.ts)
 
 ## Example prompts
 
-- `@sesp /hackathon 4-hour hackathon migrating monolith to AKS with GitHub Actions; include a GHAS challenge`
-- `@sesp /lab Set up Azure DevOps alongside a GitHub repository in the customer's tenant with OIDC federation`
-- `@sesp /architecture DevSecOps Fast Track with GitHub Copilot, GitHub Actions, and Azure Container Apps`
-- `@sesp /gatekeeper Verify participant has deployed an AKS cluster with ingress + HTTPS and a green Actions run on main`
+- `@forge /hackathon 4-hour hackathon migrating monolith to AKS with GitHub Actions; include a GHAS challenge`
+- `@forge /lab Set up Azure DevOps alongside a GitHub repository in the customer's tenant with OIDC federation`
+- `@forge /architecture DevSecOps Fast Track with GitHub Copilot, GitHub Actions, and Azure Container Apps`
+- `@forge /gatekeeper Verify participant has deployed an AKS cluster with ingress + HTTPS and a green Actions run on main`
 
 ## Packaging
 
