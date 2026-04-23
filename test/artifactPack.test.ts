@@ -116,4 +116,26 @@ describe("buildArtifactPackage", () => {
     expect(engagementDoc?.content).toContain("Definition of success");
     expect(engagementDoc?.content).toContain("Delivery roles");
   });
+
+  it("prefers explicit file artifacts over synthetic derived lab files", () => {
+    const markdown = [
+      "## Labs",
+      "### Lab 1 — Getting started with GitHub Copilot",
+      "Overview for the facilitator.",
+      "",
+      "#### File: labs/lab-01/README.md",
+      "```markdown",
+      "# Lab 01: Getting Started with GitHub Copilot",
+      "Step 1",
+      "```"
+    ].join("\n");
+
+    const artifacts = buildArtifactPackage(brief(), markdown);
+    const derivedLab = artifacts.find((artifact) => artifact.path === "labs/01-lab-1-getting-started-with-github-copilot.md");
+    const explicitLab = artifacts.find((artifact) => artifact.path === "labs/lab-01/README.md");
+
+    expect(explicitLab?.content).toContain("# Lab 01: Getting Started with GitHub Copilot");
+    expect(artifacts.find((artifact) => artifact.path === "labs/README.md")?.content).toContain("Overview for the facilitator.");
+    expect(derivedLab).toBeUndefined();
+  });
 });

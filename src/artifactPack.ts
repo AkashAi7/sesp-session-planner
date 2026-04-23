@@ -37,7 +37,8 @@ export function buildArtifactPackage(brief: CustomerBrief, markdown: string): Ge
 
   for (const section of sections) {
     const sectionPath = mapSectionPath(section.title);
-    files.push({ path: sectionPath, content: section.raw.trim() + "\n" });
+    const cleanedSection = stripEmbeddedFileArtifacts(section.raw).trim();
+    files.push({ path: sectionPath, content: ensureTrailingNewline(cleanedSection || section.raw.trim()) });
 
     if (/labs?/i.test(section.title)) {
       files.push(...splitSubArtifacts(section, "labs", /^lab\b/i));
@@ -88,11 +89,40 @@ function splitSubArtifacts(
     const start = matches[index].index ?? 0;
     const end = index + 1 < matches.length ? matches[index + 1].index ?? section.raw.length : section.raw.length;
     const raw = section.raw.slice(start, end).trim();
+    if (hasEmbeddedFileArtifacts(raw)) continue;
+    const cleaned = stripEmbeddedFileArtifacts(raw.replace(/^###\s+.+$/m, "")).trim();
+    if (!cleaned) continue;
     const fileName = `${String(ordinal).padStart(2, "0")}-${slug(title)}.md`;
-    files.push({ path: `${baseDir}/${fileName}`, content: `## ${title}\n\n${raw.replace(/^###\s+.+$/m, "").trim()}\n` });
+    files.push({ path: `${baseDir}/${fileName}`, content: `## ${title}\n\n${cleaned}\n` });
     ordinal += 1;
   }
   return files;
+}
+
+function stripEmbeddedFileArtifacts(markdown: string): string {
+  if (!markdown.trim()) return markdown;
+
+  const matches = [...markdown.matchAll(/^#{4,6}\s+File:\s+.+$/gm)];
+  if (matches.length === 0) return markdown.trim();
+
+  let cleaned = "";
+  let cursor = 0;
+
+  for (let index = 0; index < matches.length; index++) {
+    const start = matches[index].index ?? 0;
+    const end = index + 1 < matches.length
+      ? matches[index + 1].index ?? markdown.length
+      : markdown.length;
+    cleaned += markdown.slice(cursor, start);
+    cursor = end;
+  }
+
+  cleaned += markdown.slice(cursor);
+  return cleaned.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function hasEmbeddedFileArtifacts(markdown: string): boolean {
+  return /^#{4,6}\s+File:\s+.+$/m.test(markdown);
 }
 
 function extractFileArtifacts(markdown: string): GeneratedArtifact[] {
