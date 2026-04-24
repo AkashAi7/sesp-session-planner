@@ -13,7 +13,7 @@ export class SespResultsPanel {
   private buffer = "";
   private title: string;
   private savedUri?: vscode.Uri;
-  private savePackageHandler?: () => Promise<vscode.Uri | undefined>;
+  private savePackageHandler?: () => Promise<{ uri: vscode.Uri; fileCount: number } | undefined>;
 
   static create(title: string, extensionUri: vscode.Uri): SespResultsPanel {
     return new SespResultsPanel(title, extensionUri);
@@ -62,9 +62,13 @@ export class SespResultsPanel {
   }
 
   /** Called by the extension after an auto-save to surface the saved package location. */
-  notifySaved(uri: vscode.Uri) {
+  notifySaved(uri: vscode.Uri, fileCount?: number) {
     this.savedUri = uri;
-    this.panel.webview.postMessage({ type: "saved", path: vscode.workspace.asRelativePath(uri) });
+    this.panel.webview.postMessage({
+      type: "saved",
+      path: vscode.workspace.asRelativePath(uri),
+      fileCount: fileCount ?? 0
+    });
   }
 
   reveal() {
@@ -79,7 +83,7 @@ export class SespResultsPanel {
     return this.buffer;
   }
 
-  setSavePackageHandler(handler: () => Promise<vscode.Uri | undefined>) {
+  setSavePackageHandler(handler: () => Promise<{ uri: vscode.Uri; fileCount: number } | undefined>) {
     this.savePackageHandler = handler;
   }
 
@@ -89,11 +93,12 @@ export class SespResultsPanel {
 
   private async saveToWorkspace() {
     if (this.savePackageHandler) {
-      const uri = await this.savePackageHandler();
-      if (!uri) return;
-      this.notifySaved(uri);
+      const result = await this.savePackageHandler();
+      if (!result) return;
+      const { uri, fileCount } = result;
+      this.notifySaved(uri, fileCount);
       const reveal = await vscode.window.showInformationMessage(
-        `Saved package to ${uri.fsPath}`,
+        `Saved ${fileCount} files to ${vscode.workspace.asRelativePath(uri)}`,
         "Reveal"
       );
       if (reveal === "Reveal") {
@@ -239,8 +244,14 @@ export class SespResultsPanel {
   let streaming = true;
 
   function escapeHtml(s) { return s.replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;" }[c])); }
+  function preprocessForDisplay(md) {
+    // Convert <forge-file path="...">...</forge-file> to a readable #### File: heading block
+    return md.replace(/<forge-file\s+path="([^"]+)">(\s*[\s\S]*?\s*)<\/forge-file>/g, function(_, p, body) {
+      return '\n\n#### File: ' + p + '\n\n' + body.trim() + '\n\n';
+    });
+  }
   function render() {
-    const md = buffer;
+    const md = preprocessForDisplay(buffer);
     if (window.marked) {
       content.innerHTML = window.marked.parse(md) + (streaming ? '<span class="caret"></span>' : "");
     } else {
@@ -255,7 +266,8 @@ export class SespResultsPanel {
     else if (m.type === "done") { streaming = false; status.textContent = "Done"; repoBtn.disabled = false; cancelBtn.style.display = "none"; render(); }
     else if (m.type === "saved") {
       banner.classList.add("visible");
-      banner.innerHTML = 'Saved package to <code>' + m.path + '</code><a id="revealLink">Reveal in Explorer</a>';
+      const count = m.fileCount > 0 ? m.fileCount + ' files' : 'package';
+      banner.innerHTML = 'Saved ' + count + ' to <code>' + m.path + '</code><a id="revealLink">&#128194; Reveal</a>';
       document.getElementById("revealLink").onclick = () => vscode.postMessage({ type: "revealSaved" });
     }
   });

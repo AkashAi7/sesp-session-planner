@@ -1,30 +1,54 @@
-# Solution Engineer Session Planner (SESP) — VS Code Extension
+# Forge — Customer Engagement Studio
 
-A GitHub Copilot-powered VS Code extension that helps Microsoft/GitHub Solution
-Engineers rapidly plan hackathons, labs, sessions, and technical challenges
-across the **Azure** and **GitHub** product suites.
+A GitHub Copilot-powered VS Code extension that functions as a full **engagement workbench** for
+Microsoft/GitHub Solution Engineers and CSAs. Brief a customer once and generate a complete
+engagement package — or jump straight to a single artifact in seconds.
 
-It registers a Chat participant **`@forge`** that mixes and matches Azure + GitHub
-technologies, produces end-to-end event plans, step-by-step infra labs,
-goal-oriented challenges, onboarding scripts, and gatekeeper validators.
+It registers a Chat participant **`@forge`** and a guided **Forge Planner** sidebar panel, producing
+end-to-end hackathon plans, step-by-step infra labs, goal-oriented challenges, onboarding scripts,
+session decks, architecture reviews, and gatekeeper validators across the **Azure** and **GitHub** product suites.
 
 Under the hood it uses the **[GitHub Copilot SDK](https://www.npmjs.com/package/@github/copilot-sdk)**
 (`@github/copilot-sdk`) so you get the same agentic runtime that powers the
 Copilot CLI — custom tools, streaming, MCP servers, session persistence — with a
 graceful fallback to VS Code's built-in Language Model API.
 
+## Entry points
+
+### Zero friction — Quick Generate
+`Forge: Quick Generate` from the Command Palette (`⌘/Ctrl+Shift+P`) is the fastest way to generate a single
+artifact. Pick an artifact type (Lab, Hackathon, Architecture, …), describe your topic, name the customer,
+and Forge generates directly into the Results panel.
+
+### Template Library
+`Forge: Use Template` from the Command Palette (or the **Templates** button in the Planner footer) starts you
+from a pre-built engagement template (AKS Workshop, Azure OpenAI RAG Hackathon, GHAS Enablement, etc.).
+Add a customer name and Forge fills in the full structured brief automatically.
+
+### 5-step guided wizard (multi-deliverable packages)
+Click the **Forge** icon in the activity bar to open the Planner. Walk through the brief — engagement
+goal, readiness, facilitation, delivery scope — then click **Generate package**. Ideal when you want a
+coordinated set of deliverables (lab + challenge + gatekeeper + session) for a single engagement.
+
+### Chat slash commands (ad-hoc)
+```
+@forge /hackathon Design a 4-hour hackathon for migrating a monolith to AKS with GitHub Actions and GHAS.
+@forge /lab Set up Azure DevOps alongside a GitHub repository with OIDC federation.
+@forge /session 20-slide intro to Azure OpenAI for a financial services audience.
+```
+
+Available commands: `/hackathon`, `/lab`, `/challenge`, `/onboarding`, `/gatekeeper`, `/architecture`, `/session`
+
 ## Features
 
-- Chat participant **`@sesp`** with slash commands:
-  - `/hackathon` — full hackathon plan (overview, architecture, onboarding, modules, gatekeepers)
-  - `/lab` — detailed infra lab (how-to) with CLI and IaC snippets
-  - `/challenge` — participant challenge (what-to-do) with hints and success criteria
-  - `/onboarding` — prerequisite checklist + setup scripts + readiness validator
-  - `/gatekeeper` — validation script / GitHub Action per challenge
-  - `/architecture` — mix-and-match Azure + GitHub architecture with Mermaid diagram
+- **Quick Generate** — single artifact in &lt;60 s with no wizard
+- **Template Library** — 5 pre-built engagement blueprints to start from
+- **Forge Planner** — 5-step brief wizard for coordinated multi-deliverable packages
+- **Chat participant `@forge`** with slash commands for ad-hoc generation
+- **Auto-save** — packages land in `./engagements/<customer>/` in the workspace with a file count banner
+- **forge-file packaging** — AI outputs use structured `<forge-file path="...">` tags for reliable file extraction
 - Custom Copilot SDK tools: `recommend_architecture`, `generate_gatekeeper`, `generate_onboarding_plan`
 - Optional GitHub MCP server integration for repo/issue/PR grounding
-- Command palette entries: `SESP: Generate Full Session Plan / Lab / Gatekeeper`
 
 ## Prerequisites
 
@@ -47,18 +71,9 @@ npm run compile
 
 Press `F5` in VS Code to launch the Extension Development Host.
 
-**Option A — Full structured wizard** (recommended for multi-deliverable packages):
-Click the **Forge** icon in the activity bar → fill the 5-step brief → click **Generate package**.
-
-**Option B — Quick slash command** (ad-hoc generation in Chat):
-
-```
-@forge /hackathon Design a 4-hour hackathon for migrating a monolith to AKS with GitHub Actions and GHAS.
-```
-
 ## Configuration
 
-> **Finding settings:** Open VS Code Settings (`Ctrl+,`) and search **Forge** — all settings appear under the Forge section. Or use the command palette: `Forge: Open Settings`.
+> **Finding settings:** Open VS Code Settings (`Ctrl+,`) and search **Forge** — all settings appear under the Forge section.
 
 | Setting | Default | Description |
 | --- | --- | --- |

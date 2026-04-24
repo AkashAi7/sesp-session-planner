@@ -27,8 +27,104 @@ const CHAT_COMMAND_TEMPLATES: Record<string, (input: string) => string> = {
   gatekeeper: (input) =>
     `Generate a gatekeeper validation artifact (script or GitHub Actions workflow) that prints PASS/FAIL per acceptance criterion. Challenge description:\n\n${input}`,
   architecture: (input) =>
-    `Mix and match Azure + GitHub products into a cohesive architecture. Produce a Mermaid diagram and justify every component choice:\n\n${input}`
+    `Mix and match Azure + GitHub products into a cohesive architecture. Produce a Mermaid diagram and justify every component choice:\n\n${input}`,
+  session: (input) =>
+    `Produce a complete session delivery package (talk track with timing, slide outline, speaker notes, demo script, Q&A prompts) for the following scenario:\n\n${input}`
 };
+
+const QUICK_ARTIFACT_TYPES = [
+  { label: "$(beaker) Lab", description: "End-to-end hands-on lab with CLI commands and IaC", value: "lab" },
+  { label: "$(trophy) Challenge", description: "Goal-oriented challenge with acceptance criteria + hints", value: "challenge" },
+  { label: "$(cloud) Architecture", description: "Mermaid diagram + component justification", value: "architecture" },
+  { label: "$(check) Gatekeeper", description: "PASS/FAIL validation script or GitHub Actions workflow", value: "gatekeeper" },
+  { label: "$(person) Onboarding", description: "Prerequisite checklist + setup scripts + readiness validator", value: "onboarding" },
+  { label: "$(calendar) Hackathon", description: "Full hackathon plan with modules, challenges, and judging", value: "hackathon" },
+  { label: "$(book) Session", description: "Talk track, slide outline, speaker notes, demo script", value: "session" }
+] as const;
+
+interface QuickTemplate {
+  label: string;
+  description: string;
+  brief: Partial<CustomerBrief>;
+}
+
+const TEMPLATE_LIBRARY: QuickTemplate[] = [
+  {
+    label: "$(beaker) AKS Workshop",
+    description: "Containerize + deploy to AKS with GitHub Actions CI/CD",
+    brief: {
+      customerName: "Workshop",
+      engagementMode: "workshop",
+      customerContext: "Team wants to containerize a Node.js app, push to ACR, and deploy to AKS with a full GitHub Actions CI/CD pipeline including GHAS scanning.",
+      definitionOfSuccess: "Every team has a running AKS deployment triggered by a GitHub Actions workflow with GHAS enabled.",
+      technologies: ["AKS", "Azure Container Registry", "GitHub Actions", "GHAS"],
+      deliverables: ["lab", "challenge", "gatekeeper", "onboarding"],
+      duration: "4 hours",
+      skillLevel: "Intermediate",
+      audience: "Platform / DevOps engineers"
+    }
+  },
+  {
+    label: "$(robot) Azure OpenAI RAG Hackathon",
+    description: "Build a RAG app on Azure OpenAI + AI Search in a team hackathon",
+    brief: {
+      customerName: "Hackathon",
+      engagementMode: "hackathon",
+      customerContext: "Teams will build a Retrieval-Augmented Generation (RAG) chatbot using Azure OpenAI and Azure AI Search, grounded on customer documents uploaded to a Blob Storage container.",
+      definitionOfSuccess: "Each team has a deployed RAG endpoint that answers questions from their document corpus with citations. Judges verify answer quality and latency.",
+      technologies: ["Azure OpenAI", "Azure AI Search", "Azure Blob Storage", "GitHub Copilot"],
+      deliverables: ["hackathon", "challenge", "gatekeeper", "onboarding", "architecture"],
+      duration: "1 day",
+      skillLevel: "Intermediate",
+      audience: "Developers"
+    }
+  },
+  {
+    label: "$(shield) GitHub Advanced Security Enablement",
+    description: "GHAS enablement bootcamp: secret scanning, code scanning, Dependabot",
+    brief: {
+      customerName: "Bootcamp",
+      engagementMode: "bootcamp",
+      customerContext: "Customer is enabling GitHub Advanced Security across their organization. SE needs labs covering: secret scanning alerts, code scanning with CodeQL, Dependabot dependency review, and a security overview dashboard.",
+      definitionOfSuccess: "All participants have completed the secret scanning, code scanning, and Dependabot labs and can demonstrate how to triage and close findings.",
+      technologies: ["GHAS", "GitHub Actions", "GitHub Enterprise"],
+      deliverables: ["lab", "challenge", "gatekeeper", "session", "onboarding"],
+      duration: "Half day",
+      skillLevel: "Intermediate",
+      audience: "Security engineers"
+    }
+  },
+  {
+    label: "$(cloud) Azure Landing Zone Briefing",
+    description: "Architecture briefing: Azure Landing Zone + CAF + hub-spoke networking",
+    brief: {
+      customerName: "Briefing",
+      engagementMode: "briefing",
+      customerContext: "Customer is planning their Azure Landing Zone. SE needs to present CAF-aligned hub-spoke architecture, subscription topology, Entra ID hierarchy, policy guardrails, and a cost estimate.",
+      definitionOfSuccess: "Customer stakeholders have agreed on a subscription topology, network design, and guardrail policy set. CTO signs off on the architecture.",
+      technologies: ["Azure Landing Zone", "Azure Policy", "Entra ID", "Azure Networking"],
+      deliverables: ["architecture", "session", "onboarding"],
+      duration: "2 hours",
+      skillLevel: "Advanced",
+      audience: "Architects"
+    }
+  },
+  {
+    label: "$(zap) GitHub Copilot Developer Enablement",
+    description: "Developer enablement workshop: Copilot in IDE, Chat, CLI, and PRs",
+    brief: {
+      customerName: "Workshop",
+      engagementMode: "workshop",
+      customerContext: "Developer team is being onboarded to GitHub Copilot. SE needs labs covering Copilot in VS Code (completions, Chat, /explain, /fix), Copilot CLI, and Copilot PR summarization.",
+      definitionOfSuccess: "All developers have Copilot active in their editor, have completed the labs, and can use /explain, /fix, and Chat to accelerate their daily work.",
+      technologies: ["GitHub Copilot", "GitHub Actions", "VS Code"],
+      deliverables: ["lab", "challenge", "session", "onboarding"],
+      duration: "4 hours",
+      skillLevel: "Beginner",
+      audience: "Developers"
+    }
+  }
+];
 
 export function activate(context: vscode.ExtensionContext) {
   const output = vscode.window.createOutputChannel("Forge");
@@ -108,8 +204,8 @@ export function activate(context: vscode.ExtensionContext) {
     // Auto-save to workspace
     if (autoSave && brief) {
       try {
-        const uri = await autoSaveToWorkspace(brief, panel.markdown);
-        if (uri) panel.notifySaved(uri);
+        const result = await autoSaveToWorkspace(brief, panel.markdown);
+        if (result) panel.notifySaved(result.uri, result.fileCount);
         else {
           panel.setStatus("Done");
           void vscode.window.showInformationMessage(
@@ -399,7 +495,105 @@ export function activate(context: vscode.ExtensionContext) {
     // Legacy aliases
     vscode.commands.registerCommand("sesp.generateSessionPlan", () => quickStart()),
     vscode.commands.registerCommand("sesp.generateLab", () => quickStart()),
-    vscode.commands.registerCommand("sesp.generateGatekeeper", () => quickStart())
+    vscode.commands.registerCommand("sesp.generateGatekeeper", () => quickStart()),
+
+    // Quick Generate: single artifact without the full wizard
+    vscode.commands.registerCommand("sesp.quickArtifact", async () => {
+      const typePick = await vscode.window.showQuickPick(
+        QUICK_ARTIFACT_TYPES.map(t => ({ label: t.label, description: t.description, value: t.value })),
+        { placeHolder: "What do you want to generate?", title: "Forge: Quick Generate" }
+      );
+      if (!typePick) return;
+
+      const topic = await vscode.window.showInputBox({
+        prompt: "Describe the topic or scenario",
+        placeHolder: "e.g. Containerize a Node.js app on AKS with GitHub Actions CI/CD",
+        ignoreFocusOut: true
+      });
+      if (!topic) return;
+
+      const customerName = (await vscode.window.showInputBox({
+        prompt: "Customer name (optional — press Enter to skip)",
+        placeHolder: "Contoso Ltd.",
+        ignoreFocusOut: true
+      })) ?? "";
+
+      type QuickValue = typeof QUICK_ARTIFACT_TYPES[number]["value"];
+      const artifactValue = typePick.value as QuickValue;
+      const quickBrief: CustomerBrief = {
+        customerName: customerName || artifactValue,
+        industry: "",
+        engagementMode: artifactValue === "hackathon" ? "hackathon" : "workshop",
+        customerContext: topic,
+        definitionOfSuccess: "Participants complete the core flow, pass the validators, and leave with reusable assets.",
+        conversationInsights: "",
+        constraints: "",
+        complianceTags: [],
+        tenant: "customer",
+        audience: "Developers",
+        skillLevel: "Intermediate",
+        duration: "4 hours",
+        technologies: [],
+        deliverables: [artifactValue as import("./plannerView").Deliverable],
+        useWorkIqInsights: false,
+        emphasis: "Balanced (architecture + hands-on)",
+        model: vscode.workspace.getConfiguration("sesp").get<string>("model") ?? "gpt-4.1",
+        readiness: { status: "yellow", environment: "", accessAndApprovals: "", logistics: "", blockers: "" },
+        deliveryRoles: { facilitatorProfile: "", supportModel: "guided", participantProfile: "", participantGrouping: "teams" },
+        labOptions: { ...DEFAULT_LAB_OPTIONS },
+        sessionOptions: { ...DEFAULT_SESSION_OPTIONS }
+      };
+
+      const promptFn = CHAT_COMMAND_TEMPLATES[artifactValue];
+      const prompt = promptFn ? promptFn(topic) : topic;
+      const cleanLabel = typePick.label.replace(/\$\([\w-]+\)\s*/g, "");
+      const title = customerName ? `${customerName} — ${cleanLabel}` : `${cleanLabel}: ${topic.slice(0, 60)}`;
+      await generateToPanel(title, prompt, quickBrief);
+    }),
+
+    // Template Library: start from a pre-built scenario brief
+    vscode.commands.registerCommand("sesp.insertTemplate", async () => {
+      const pick = await vscode.window.showQuickPick(
+        TEMPLATE_LIBRARY.map(t => ({ label: t.label, description: t.description, template: t })),
+        { placeHolder: "Choose a starting template", title: "Forge: Use Template" }
+      );
+      if (!pick) return;
+
+      const customerName = await vscode.window.showInputBox({
+        prompt: "Customer name",
+        placeHolder: "Contoso Ltd.",
+        ignoreFocusOut: true,
+        value: ""
+      });
+      if (!customerName) return;
+
+      const t = pick.template;
+      const brief: CustomerBrief = {
+        customerName,
+        industry: "",
+        engagementMode: t.brief.engagementMode ?? "workshop",
+        customerContext: t.brief.customerContext ?? "",
+        definitionOfSuccess: t.brief.definitionOfSuccess ?? "",
+        conversationInsights: "",
+        constraints: "",
+        complianceTags: [],
+        tenant: "customer",
+        audience: t.brief.audience ?? "Developers",
+        skillLevel: t.brief.skillLevel ?? "Intermediate",
+        duration: t.brief.duration ?? "4 hours",
+        technologies: t.brief.technologies ?? [],
+        deliverables: t.brief.deliverables ?? ["lab", "challenge", "gatekeeper"],
+        useWorkIqInsights: false,
+        emphasis: "Balanced (architecture + hands-on)",
+        model: vscode.workspace.getConfiguration("sesp").get<string>("model") ?? "gpt-4.1",
+        readiness: { status: "yellow", environment: "", accessAndApprovals: "", logistics: "", blockers: "" },
+        deliveryRoles: { facilitatorProfile: "", supportModel: "guided", participantProfile: "", participantGrouping: "teams" },
+        labOptions: { ...DEFAULT_LAB_OPTIONS },
+        sessionOptions: { ...DEFAULT_SESSION_OPTIONS }
+      };
+
+      await submitBrief(brief);
+    })
   );
 
   context.subscriptions.push({ dispose: () => void sdkSession.dispose() });

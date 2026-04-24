@@ -88,11 +88,16 @@ results into multiple files: '## Workspace Blueprint', '## Event Overview',
 and Challenges, use '### Lab N - Title' and '### Challenge N - Title' headings.
 
 The package must be repo-ready, not just descriptive. Emit concrete file artifacts
-using headings in the exact form '#### File: relative/path.ext' (or one more #).
-Immediately after each file heading, include the full contents of that file in a
-fenced code block when it is code/config/script, or plain markdown when it is a
-markdown/text file. Prefer multiple focused files in separate folders over one
-monolithic markdown dump.
+using the structured tag format below — it is the primary and preferred method
+because it enables reliable workspace packaging:
+
+<forge-file path="relative/path.ext">
+...full file content here (markdown, code, scripts, YAML, etc.)...
+</forge-file>
+
+Include the full contents immediately inside the tag. Prefer multiple focused files
+in separate folders over one monolithic dump. The fallback heading format
+'#### File: relative/path.ext' followed by a fenced code block is also accepted.
 
 When the user asks for a partial artifact (just a gatekeeper, just onboarding,
 just an architecture), emit only that section and omit the rest.

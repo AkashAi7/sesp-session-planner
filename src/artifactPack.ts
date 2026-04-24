@@ -20,10 +20,12 @@ const SECTION_PATHS: Array<{ match: RegExp; path: string }> = [
 
 export function buildArtifactPackage(brief: CustomerBrief, markdown: string): GeneratedArtifact[] {
   const normalized = markdown.replace(/\r\n/g, "\n").trim();
-  const sections = splitSections(normalized);
+  // Strip forge-file tags from the master document so ENGAGEMENT.md stays clean
+  const engagementContent = stripForgeFileTags(normalized);
+  const sections = splitSections(engagementContent);
   const files: GeneratedArtifact[] = [];
 
-  files.push({ path: "ENGAGEMENT.md", content: normalized + "\n" });
+  files.push({ path: "ENGAGEMENT.md", content: engagementContent + "\n" });
   files.push({ path: "docs/customer-brief.md", content: buildCustomerBriefDoc(brief) });
 
   if (brief.conversationInsights.trim()) {
@@ -33,7 +35,13 @@ export function buildArtifactPackage(brief: CustomerBrief, markdown: string): Ge
     });
   }
 
-  files.push(...extractFileArtifacts(normalized));
+  // Prefer structured <forge-file> tags; fall back to #### File: heading scan
+  const forgeFileArtifacts = parseForgeFiles(normalized);
+  if (forgeFileArtifacts !== null) {
+    files.push(...forgeFileArtifacts);
+  } else {
+    files.push(...extractFileArtifacts(normalized));
+  }
 
   for (const section of sections) {
     const sectionPath = mapSectionPath(section.title);
@@ -55,6 +63,31 @@ export function buildArtifactPackage(brief: CustomerBrief, markdown: string): Ge
   deduped.unshift({ path: "README.md", content: buildPackageReadme(brief, deduped) });
   deduped.push({ path: "PACKAGE_INDEX.md", content: buildPackageIndex(deduped) });
   return dedupeArtifacts(deduped);
+}
+
+/**
+ * Parse structured <forge-file path="...">...</forge-file> tags emitted by the model.
+ * Returns null if no forge-file tags are found (fall back to heading scan).
+ */
+export function parseForgeFiles(markdown: string): GeneratedArtifact[] | null {
+  const matches = [...markdown.matchAll(/<forge-file\s+path="([^"]+)">(\s*[\s\S]*?\s*)<\/forge-file>/g)];
+  if (matches.length === 0) return null;
+  const files: GeneratedArtifact[] = [];
+  for (const match of matches) {
+    const filePath = normalizeArtifactPath(match[1]);
+    if (!filePath) continue;
+    files.push({ path: filePath, content: ensureTrailingNewline(match[2].trim()) });
+  }
+  return files.length > 0 ? files : null;
+}
+
+/** Remove <forge-file> wrapper tags, keeping the content for display in ENGAGEMENT.md. */
+export function stripForgeFileTags(markdown: string): string {
+  if (!markdown.trim()) return markdown;
+  return markdown
+    .replace(/<forge-file\s+path="[^"]+">(\s*[\s\S]*?\s*)<\/forge-file>/g, (_match, content: string) => content.trim())
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 function splitSections(markdown: string): Array<{ title: string; raw: string; body: string }> {
@@ -122,7 +155,7 @@ function stripEmbeddedFileArtifacts(markdown: string): string {
 }
 
 function hasEmbeddedFileArtifacts(markdown: string): boolean {
-  return /^#{4,6}\s+File:\s+.+$/m.test(markdown);
+  return /^#{4,6}\s+File:\s+.+$/m.test(markdown) || /<forge-file\s+path="/.test(markdown);
 }
 
 function extractFileArtifacts(markdown: string): GeneratedArtifact[] {

@@ -54,10 +54,6 @@ export function validateBrief(brief: CustomerBrief): string {
   if (!brief.definitionOfSuccess.trim()) return "Definition of success is required.";
   if (brief.deliverables.length === 0) return "At least one generated output is required.";
   if (brief.technologies.length === 0) return "Select at least one technology.";
-  if (!brief.readiness.environment.trim()) return "Environment readiness is required.";
-  if (!brief.readiness.accessAndApprovals.trim()) return "Access and approvals are required.";
-  if (!brief.deliveryRoles.facilitatorProfile.trim()) return "Facilitator guide focus is required.";
-  if (!brief.deliveryRoles.participantProfile.trim()) return "Participant experience is required.";
 
   if (brief.deliverables.includes("lab") && brief.labOptions.components.length === 0)
     return "Select at least one lab section to include.";

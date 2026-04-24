@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { validateBrief, buildBriefPrompt } from "../src/briefPrompt";
-import type { CustomerBrief } from "../src/plannerView";
+import type { CustomerBrief } from "../src/plannerDefaults";
 import {
   DEFAULT_LAB_OPTIONS,
   DEFAULT_SESSION_OPTIONS
-} from "../src/plannerView";
+} from "../src/plannerDefaults";
 
 function baseBrief(overrides: Partial<CustomerBrief> = {}): CustomerBrief {
   return {
@@ -100,16 +100,6 @@ describe("validateBrief", () => {
   it("rejects missing definition of success", () => {
     const err = validateBrief(baseBrief({ definitionOfSuccess: "   " }));
     expect(err).toContain("Definition of success");
-  });
-
-  it("rejects missing readiness environment", () => {
-    const err = validateBrief(baseBrief({ readiness: { ...baseBrief().readiness, environment: "" } }));
-    expect(err).toContain("Environment readiness");
-  });
-
-  it("rejects missing facilitator profile", () => {
-    const err = validateBrief(baseBrief({ deliveryRoles: { ...baseBrief().deliveryRoles, facilitatorProfile: "" } }));
-    expect(err).toContain("Facilitator guide focus");
   });
 
   it("rejects session with empty components", () => {

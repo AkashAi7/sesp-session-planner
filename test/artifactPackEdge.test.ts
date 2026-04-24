@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildArtifactPackage } from "../src/artifactPack";
+import { buildArtifactPackage, parseForgeFiles, stripForgeFileTags } from "../src/artifactPack";
 import type { CustomerBrief } from "../src/plannerView";
 
 function brief(overrides: Partial<CustomerBrief> = {}): CustomerBrief {
@@ -160,5 +160,85 @@ describe("artifactPack edge cases", () => {
     // Backslash normalization happens inside the function
     const ps = artifacts.find((a) => a.path.includes("init.ps1"));
     expect(ps).toBeDefined();
+  });
+});
+
+// ─── parseForgeFiles ─────────────────────────────────────────────────────────
+
+describe("parseForgeFiles", () => {
+  it("extracts a single forge-file tag", () => {
+    const md = [
+      '<forge-file path="scripts/setup.sh">',
+      "#!/bin/bash",
+      "echo hello",
+      "</forge-file>"
+    ].join("\n");
+    const result = parseForgeFiles(md);
+    expect(result).not.toBeNull();
+    expect(result).toHaveLength(1);
+    expect(result![0].path).toBe("scripts/setup.sh");
+    expect(result![0].content.trim()).toBe("#!/bin/bash\necho hello");
+  });
+
+  it("extracts multiple forge-file tags", () => {
+    const md = [
+      '<forge-file path="a.ts">',
+      "const a = 1;",
+      "</forge-file>",
+      "",
+      '<forge-file path="b.md">',
+      "# Readme",
+      "</forge-file>"
+    ].join("\n");
+    const result = parseForgeFiles(md);
+    expect(result).toHaveLength(2);
+    expect(result![0].path).toBe("a.ts");
+    expect(result![1].path).toBe("b.md");
+  });
+
+  it("returns null when no forge-file tags are present", () => {
+    const md = "## Some heading\n\nJust prose, no files.\n\n#### File: something.ts\n```ts\nconst x = 1;\n```";
+    expect(parseForgeFiles(md)).toBeNull();
+  });
+
+  it("trims trailing whitespace from content", () => {
+    const md = '<forge-file path="x.txt">\nhello   \n  world  \n</forge-file>';
+    const result = parseForgeFiles(md);
+    expect(result![0].content.trimEnd()).toBe("hello   \n  world");
+  });
+});
+
+// ─── stripForgeFileTags ───────────────────────────────────────────────────────
+
+describe("stripForgeFileTags", () => {
+  it("removes forge-file wrapper tags while keeping content", () => {
+    const md = [
+      "Some intro text.",
+      "",
+      '<forge-file path="setup.sh">',
+      "#!/bin/bash",
+      "echo hello",
+      "</forge-file>",
+      "",
+      "Some closing text."
+    ].join("\n");
+    const result = stripForgeFileTags(md);
+    expect(result).not.toContain("<forge-file");
+    expect(result).not.toContain("</forge-file>");
+    expect(result).toContain("#!/bin/bash");
+    expect(result).toContain("Some intro text.");
+    expect(result).toContain("Some closing text.");
+  });
+
+  it("strips the path attribute from opening tags", () => {
+    const md = '<forge-file path="infra/main.bicep">\nparam name string\n</forge-file>';
+    const result = stripForgeFileTags(md);
+    expect(result).not.toContain('path="infra/main.bicep"');
+    expect(result).toContain("param name string");
+  });
+
+  it("is a no-op when no forge-file tags exist", () => {
+    const md = "# Plain markdown\n\nNo tags here.";
+    expect(stripForgeFileTags(md)).toBe(md);
   });
 });

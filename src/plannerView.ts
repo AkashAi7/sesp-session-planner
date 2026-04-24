@@ -1,123 +1,28 @@
 import * as vscode from "vscode";
-
-export type Deliverable =
-  | "hackathon"
-  | "lab"
-  | "challenge"
-  | "session"
-  | "onboarding"
-  | "gatekeeper"
-  | "architecture";
-
-export type EngagementMode = "workshop" | "hackathon" | "briefing" | "poc" | "bootcamp";
-
-export interface LabOptions {
-  components: string[];
-  runtime: "bash" | "pwsh" | "mixed" | "actions";
-  iac: "azd" | "bicep" | "terraform" | "arm" | "none";
-  labCount: string;
-  includeTimings: boolean;
-  includeCost: boolean;
-  includeSecurityReview: boolean;
-  includeExpectedOutputs: boolean;
-  depth: "standard" | "exhaustive";
-}
-
-export interface SessionOptions {
-  components: string[];
-  structure: "theory" | "demo" | "hands-on" | "mixed";
-  slideCount: string;
-  topics: string;
-  introDepth: "assume-expertise" | "light-intro" | "full-intro";
-  wrapUp: string;
-  format: "in-person" | "virtual" | "hybrid";
-  interactivity: "low" | "medium" | "high";
-}
-
-export interface ReadinessProfile {
-  status: "green" | "yellow" | "red";
-  environment: string;
-  accessAndApprovals: string;
-  logistics: string;
-  blockers: string;
-}
-
-export interface DeliveryRoles {
-  facilitatorProfile: string;
-  supportModel: "light-touch" | "guided" | "high-touch";
-  participantProfile: string;
-  participantGrouping: "individual" | "pairs" | "teams";
-}
-
-export interface CustomerBrief {
-  customerName: string;
-  industry: string;
-  engagementMode: EngagementMode;
-  customerContext: string;
-  definitionOfSuccess: string;
-  conversationInsights: string;
-  constraints: string;
-  complianceTags: string[];
-  tenant: "customer" | "microsoft" | "personal";
-  audience: string;
-  skillLevel: string;
-  duration: string;
-  technologies: string[];
-  deliverables: Deliverable[];
-  useWorkIqInsights: boolean;
-  emphasis: string;
-  model: string;
-  readiness: ReadinessProfile;
-  deliveryRoles: DeliveryRoles;
-  labOptions: LabOptions;
-  sessionOptions: SessionOptions;
-}
-
-export const LAB_COMPONENT_IDS = [
-  "prereqs",
-  "role-assignments",
-  "provisioning",
-  "app-deploy",
-  "config",
-  "gatekeeper-run",
-  "troubleshooting",
-  "cleanup"
-] as const;
-
-export const SESSION_COMPONENT_IDS = [
-  "talk-track",
-  "slide-outline",
-  "speaker-notes",
-  "demo-script",
-  "workshop",
-  "qa-prompts",
-  "pre-reads",
-  "follow-up",
-  "recording-checklist"
-] as const;
-
-export const DEFAULT_LAB_OPTIONS: LabOptions = {
-  components: [...LAB_COMPONENT_IDS],
-  runtime: "mixed",
-  iac: "bicep",
-  labCount: "3",
-  includeTimings: true,
-  includeCost: true,
-  includeSecurityReview: true,
-  includeExpectedOutputs: true,
-  depth: "exhaustive"
-};
-
-export const DEFAULT_SESSION_OPTIONS: SessionOptions = {
-  components: ["talk-track", "slide-outline", "speaker-notes", "demo-script", "qa-prompts"],
-  structure: "mixed",
-  slideCount: "20",
-  topics: "",
-  introDepth: "light-intro",
-  wrapUp: "",
-  format: "hybrid",
-  interactivity: "medium"
-};
+import {
+  Deliverable,
+  EngagementMode,
+  CustomerBrief,
+  DEFAULT_LAB_OPTIONS,
+  DEFAULT_SESSION_OPTIONS,
+  LAB_COMPONENT_IDS,
+  SESSION_COMPONENT_IDS
+} from "./plannerDefaults";
+export type {
+  Deliverable,
+  EngagementMode,
+  LabOptions,
+  SessionOptions,
+  ReadinessProfile,
+  DeliveryRoles,
+  CustomerBrief
+} from "./plannerDefaults";
+export {
+  LAB_COMPONENT_IDS,
+  SESSION_COMPONENT_IDS,
+  DEFAULT_LAB_OPTIONS,
+  DEFAULT_SESSION_OPTIONS
+} from "./plannerDefaults";
 
 const MODE_DELIVERABLES: Record<EngagementMode, Deliverable[]> = {
   workshop: ["lab", "challenge", "gatekeeper", "onboarding", "session", "architecture"],
@@ -150,6 +55,7 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this.renderHtml(webviewView.webview, this.workIqEnabled);
     webviewView.webview.onDidReceiveMessage(async (msg) => {
       if (msg?.type === "submit") await this.onSubmit(msg.brief as CustomerBrief);
+      if (msg?.type === "insertTemplate") await vscode.commands.executeCommand("sesp.insertTemplate");
     });
   }
 
@@ -366,9 +272,8 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
 <body>
 <header>
   <h1>Forge Planner</h1>
-  <div class="sub">A guided 5-step wizard for CSA / Solution Engineer engagements. Start with the engagement mode and success criteria, then capture readiness, facilitation, and technical scope before Forge generates the package.</div>
+  <div class="sub">Brief a customer once, generate a complete engagement package. For a quick single artifact, use <strong>Forge: Quick Generate</strong> (⌘/Ctrl+Shift+P).</div>
 </header>
-
 <div class="wizard-shell">
   <div class="steps" id="steps"></div>
 
@@ -486,12 +391,12 @@ export class SespPlannerViewProvider implements vscode.WebviewViewProvider {
     </div>
 
     <div class="field">
-      <label for="environmentReadiness">Environment readiness<span class="req">*</span></label>
+      <label for="environmentReadiness">Environment readiness</label>
       <textarea id="environmentReadiness" placeholder="What already exists? Landing zone, subscriptions, pre-created resources, repo structure, baseline apps, dev boxes, approved services."></textarea>
     </div>
 
     <div class="field">
-      <label for="accessPrereqs">Access and approvals<span class="req">*</span></label>
+      <label for="accessPrereqs">Access and approvals</label>
       <textarea id="accessPrereqs" placeholder="RBAC, Entra approvals, GitHub org permissions, service principal approvals, allowlists, quota checks, who owns each prerequisite."></textarea>
     </div>
 
@@ -524,11 +429,11 @@ ${workIqEnabled ? '        <label class="toggle"><input type="checkbox" id="useW
 
     <div class="row2">
       <div class="field">
-        <label for="facilitatorProfile">Facilitator guide focus<span class="req">*</span></label>
+        <label for="facilitatorProfile">Facilitator guide focus</label>
         <textarea id="facilitatorProfile" placeholder="Who is leading? What do facilitators need: speaker notes, answer key, demo fallback, escalation path, timing control, judge rubric, room checkpoints."></textarea>
       </div>
       <div class="field">
-        <label for="participantProfile">Participant experience<span class="req">*</span></label>
+        <label for="participantProfile">Participant experience</label>
         <textarea id="participantProfile" placeholder="What should participants experience? Example: guided build, pair debugging, team-based challenge flow, architecture trade-off discussion, take-home assets."></textarea>
       </div>
     </div>
@@ -699,6 +604,7 @@ ${workIqEnabled ? '        <label class="toggle"><input type="checkbox" id="useW
 
   <div class="footer">
     <button id="resetBtn">Reset</button>
+    <button id="templateBtn" title="Start from a pre-built template">$(library) Templates</button>
     <div class="grow"></div>
     <div class="error" id="error"></div>
     <button id="prevBtn">Back</button>
@@ -980,7 +886,7 @@ ${workIqEnabled ? '        <label class="toggle"><input type="checkbox" id="useW
       "<li><strong>Outputs:</strong> " + derivedDeliverables().join(", ") + "</li>",
       "<li><strong>Success:</strong> " + escapeHtml(document.getElementById("definitionOfSuccess").value || "(required)") + "</li>",
       "<li><strong>Readiness:</strong> " + escapeHtml(document.getElementById("readinessStatus").value || "yellow") + " - " + escapeHtml(document.getElementById("knownBlockers").value || "no blockers noted") + "</li>",
-      "<li><strong>Facilitator focus:</strong> " + escapeHtml(document.getElementById("facilitatorProfile").value || "(required)") + "</li>",
+      "<li><strong>Facilitator focus:</strong> " + escapeHtml(document.getElementById("facilitatorProfile").value || "(not specified)") + "</li>",
       "<li><strong>Participant experience:</strong> " + escapeHtml(document.getElementById("participantProfile").value || "(required)") + "</li>",
       "<li><strong>Technologies:</strong> " + escapeHtml(technologies.join(", ") || "(required)") + "</li>",
       "</ul>"
@@ -1072,10 +978,6 @@ ${workIqEnabled ? '        <label class="toggle"><input type="checkbox" id="useW
     if (!brief.customerContext) return "Customer context is required.";
     if (!brief.definitionOfSuccess) return "Definition of success is required.";
     if (brief.technologies.length === 0) return "Select at least one technology.";
-    if (!brief.readiness.environment) return "Environment readiness is required.";
-    if (!brief.readiness.accessAndApprovals) return "Access and approvals are required.";
-    if (!brief.deliveryRoles.facilitatorProfile) return "Facilitator guide focus is required.";
-    if (!brief.deliveryRoles.participantProfile) return "Participant experience is required.";
     if (brief.deliverables.includes("lab") && brief.labOptions.components.length === 0) return "Select at least one lab section.";
     if (brief.deliverables.includes("session") && brief.sessionOptions.components.length === 0) return "Select at least one session component.";
     const govCompliance = brief.complianceTags.some((t) => t === "FedRAMP" || t === "Azure Gov");
@@ -1168,6 +1070,7 @@ ${workIqEnabled ? '        <label class="toggle"><input type="checkbox" id="useW
   document.getElementById("prevBtn").onclick = () => setStep(state.step - 1);
   document.getElementById("nextBtn").onclick = () => setStep(state.step + 1);
   document.getElementById("resetBtn").onclick = reset;
+  document.getElementById("templateBtn").onclick = () => vscode.postMessage({ type: "insertTemplate" });
   document.getElementById("submitBtn").onclick = () => {
     const brief = gather();
     const err = validate(brief);

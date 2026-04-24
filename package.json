@@ -100,9 +100,19 @@
           "group": "navigation"
         },
         {
-          "command": "sesp.openSettings",
+          "command": "sesp.quickArtifact",
+          "when": "view == sesp.plannerView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sesp.insertTemplate",
           "when": "view == sesp.plannerView",
           "group": "navigation@2"
+        },
+        {
+          "command": "sesp.openSettings",
+          "when": "view == sesp.plannerView",
+          "group": "navigation@3"
         },
         {
           "command": "sesp.clearHistory",
@@ -169,6 +179,18 @@
         "title": "Forge: Quick Start (wizard)",
         "category": "Forge",
         "icon": "$(wand)"
+      },
+      {
+        "command": "sesp.quickArtifact",
+        "title": "Forge: Quick Generate",
+        "category": "Forge",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "sesp.insertTemplate",
+        "title": "Forge: Use Template",
+        "category": "Forge",
+        "icon": "$(library)"
       },
       {
         "command": "sesp.generateSessionPlan",
